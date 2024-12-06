@@ -7,7 +7,7 @@ This is the Rust/Anchor smart contract for Pump.fun, which includes functionalit
 ### Available to share the demo url
 
 ### Contact
-For any questions, please reach out to @rust_sol_dev on Telegram or rust_dev_ on Discord.
+For any questions, please reach out to @rust_sol_dev on Telegram or rust_sol_dev on Discord.
 
 ### Features
 Token Listing: View a comprehensive list of Pumpfun tokens.
@@ -20,4 +20,4 @@ Progressive Web App (PWA): Add Pump.fun to your desktop for an enhanced experien
 
 ### Transactions
 You can review the transactions for removing virtual LP and creating Raydium Pools in this smart contract:
-https://explorer.solana.com/tx/4L6MWmtV1ZsT8NFfbtu68ZYyYVbpvZ4iynJhPdZw8jESi28TxwojjTFs88Q5QRdNUb297aWfkKcoYP9Ya8npx8AV?cluster=devnet
+https://explorer.solana.com/tx/4L6MWmtV1ZsT8NFfbtu68ZYyYVbpvZ4iynJhPdZw8jESi28TxwojjTFs88Q5QRdNUb297aWfkKcoYP9Ya8npx8AV?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899

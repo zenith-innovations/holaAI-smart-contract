@@ -8,7 +8,7 @@ pub mod consts;
 
 use crate::instructions::*;
 
-declare_id!("5mdPUgyK9mqosLtqZvfpY5pcpCqQBWHuS3XoU34CrJK3");
+declare_id!("7cyVZehNQVF6TQNugB5cKNedCKcMCwcvGryBpjh9WuHV");
 
 #[program]
 pub mod bonding_curve {
@@ -38,6 +38,15 @@ pub mod bonding_curve {
 
     pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
         instructions::sell(ctx, amount, bump)
+    }
+
+    pub fn create_token(
+        ctx: Context<CreateToken>,
+        name: String,
+        symbol: String,
+        off_chain_id: String,
+    ) -> Result<()> {
+        instructions::create_token(ctx, name, symbol, off_chain_id)
     }
     
 }

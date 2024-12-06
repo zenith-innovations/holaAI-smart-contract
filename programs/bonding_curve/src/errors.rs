@@ -49,4 +49,16 @@ pub enum CustomError {
    
     #[msg("Amount is negative")]
     NegativeNumber,
+
+    #[msg("Failed to initialize mint")]
+    MintInitializationFailed,
+
+    #[msg("Failed to mint tokens")]
+    MintFailed,
+
+    #[msg("Invalid decimal value")]
+    InvalidDecimalValue,
+
+    #[msg("Invalid input parameters")]
+    InvalidInput,
 }

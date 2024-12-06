@@ -1,5 +1,4 @@
 use crate::consts::INITIAL_LAMPORTS_FOR_POOL;
-use crate::consts::INITIAL_PRICE_DIVIDER;
 use crate::consts::PROPORTION;
 use crate::errors::CustomError;
 use anchor_lang::prelude::*;
@@ -63,6 +62,19 @@ impl LiquidityPool {
             bump,
         }
     }
+}
+
+#[event]
+pub struct TradeEvent {
+    pub pool: Pubkey,
+    pub token_mint: Pubkey, 
+    pub amount_in: u64,
+    pub amount_out: u64,
+    pub reserve_token_before: u64,
+    pub reserve_token_after: u64,
+    pub reserve_sol_before: u64,
+    pub reserve_sol_after: u64,
+    pub is_buy: bool,
 }
 
 pub trait LiquidityPoolAccount<'info> {
@@ -295,6 +307,18 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             amount_out,
             token_program,
         )?;
+
+        emit!(TradeEvent {
+            pool: self.key(),
+            token_mint: token_accounts.0.key(),
+            amount_in: amount,
+            amount_out: amount_out,
+            reserve_sol_before: self.reserve_sol,
+            reserve_sol_after: self.reserve_sol,
+            reserve_token_before: self.reserve_token,
+            reserve_token_after: self.reserve_token,
+            is_buy: true,
+        });
         Ok(())
     }
 
@@ -353,6 +377,18 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         self.reserve_sol -= amount_out;
 
         self.transfer_sol_from_pool(pool_sol_vault, authority, amount_out, bump, system_program)?;
+
+        emit!(TradeEvent {
+            pool: self.key(),
+            token_mint: token_accounts.0.key(),
+            amount_in: amount,
+            amount_out: amount_out,
+            reserve_token_before: self.reserve_token,
+            reserve_token_after: self.reserve_token,
+            reserve_sol_before: self.reserve_sol,
+            reserve_sol_after: self.reserve_sol,
+            is_buy: false,
+        });
 
         Ok(())
     }
@@ -458,92 +494,92 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
     }
 }
 
-fn calculate_amount_out(reserve_token_with_decimal: u64, amount_with_decimal: u64) -> Result<u64> {
-    // Convert to f64 for decimal calculations
-    let reserve_token = (reserve_token_with_decimal as f64) / 1_000_000_000.0;
-    let amount = (amount_with_decimal as f64) / 1_000_000_000.0;
+// fn calculate_amount_out(reserve_token_with_decimal: u64, amount_with_decimal: u64) -> Result<u64> {
+//     // Convert to f64 for decimal calculations
+//     let reserve_token = (reserve_token_with_decimal as f64) / 1_000_000_000.0;
+//     let amount = (amount_with_decimal as f64) / 1_000_000_000.0;
 
-    msg!(
-        "Starting calculation with reserve_token: {}, amount: {}",
-        reserve_token,
-        amount
-    );
+//     msg!(
+//         "Starting calculation with reserve_token: {}, amount: {}",
+//         reserve_token,
+//         amount
+//     );
 
-    let two_reserve_token = reserve_token * 2.0;
-    msg!("two_reserve_token: {}", two_reserve_token);
+//     let two_reserve_token = reserve_token * 2.0;
+//     msg!("two_reserve_token: {}", two_reserve_token);
 
-    let one_added = two_reserve_token + 1.0;
-    msg!("one_added: {}", one_added);
+//     let one_added = two_reserve_token + 1.0;
+//     msg!("one_added: {}", one_added);
 
-    let squared = one_added * one_added;
-    msg!("squared: {}", squared);
+//     let squared = one_added * one_added;
+//     msg!("squared: {}", squared);
 
-    // Use `amount` directly as it's already a decimal in f64
-    let amount_added = squared + amount * 8.0;
-    msg!("amount_added: {}", amount_added);
+//     // Use `amount` directly as it's already a decimal in f64
+//     let amount_added = squared + amount * 8.0;
+//     msg!("amount_added: {}", amount_added);
 
-    // Square root calculation
-    let sqrt_result = amount_added.sqrt();
-    msg!("sqrt_result: {}", sqrt_result);
+//     // Square root calculation
+//     let sqrt_result = amount_added.sqrt();
+//     msg!("sqrt_result: {}", sqrt_result);
 
-    // Check if sqrt_result is valid
-    if sqrt_result < 0.0 {
-        msg!("Error: Negative sqrt_result");
-        return err!(CustomError::NegativeNumber);
-    }
+//     // Check if sqrt_result is valid
+//     if sqrt_result < 0.0 {
+//         msg!("Error: Negative sqrt_result");
+//         return err!(CustomError::NegativeNumber);
+//     }
 
-    let subtract_one = sqrt_result - one_added;
-    msg!("subtract_one: {}", subtract_one);
+//     let subtract_one = sqrt_result - one_added;
+//     msg!("subtract_one: {}", subtract_one);
 
-    let amount_out = subtract_one / 2.0;
-    msg!("amount_out: {}", amount_out);
+//     let amount_out = subtract_one / 2.0;
+//     msg!("amount_out: {}", amount_out);
 
-    // Convert the final result back to u64 with appropriate scaling
-    let amount_out_decimal =
-        (amount_out * 1_000_000_000.0 * INITIAL_PRICE_DIVIDER as f64).round() as u64;
-    msg!("amount_out_decimal: {}", amount_out_decimal);
+//     // Convert the final result back to u64 with appropriate scaling
+//     let amount_out_decimal =
+//         (amount_out * 1_000_000_000.0 * INITIAL_PRICE_DIVIDER as f64).round() as u64;
+//     msg!("amount_out_decimal: {}", amount_out_decimal);
 
-    Ok(amount_out_decimal)
-}
+//     Ok(amount_out_decimal)
+// }
 
 
-fn calculate_amount_out(reserve_token_decimal: u64, amount_decimal: u64) -> Result<u64> {
-    let reserve_token = reserve_token_decimal.checked_div(1000000000).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    let amount = amount_decimal.checked_div(1000000000).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("Starting calculation with reserve_token: {}, amount: {}", reserve_token, amount);
-    let two_reserve_token = reserve_token.checked_mul(2).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("two_reserve_token: {}", two_reserve_token);
+// fn calculate_amount_out(reserve_token_decimal: u64, amount_decimal: u64) -> Result<u64> {
+//     let reserve_token = reserve_token_decimal.checked_div(1000000000).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     let amount = amount_decimal.checked_div(1000000000).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("Starting calculation with reserve_token: {}, amount: {}", reserve_token, amount);
+//     let two_reserve_token = reserve_token.checked_mul(2).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("two_reserve_token: {}", two_reserve_token);
 
-    let one_added = two_reserve_token.checked_add(1).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("one_added: {}", one_added);
+//     let one_added = two_reserve_token.checked_add(1).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("one_added: {}", one_added);
 
-    let squared = one_added.checked_mul(one_added).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("squared: {}", squared);
+//     let squared = one_added.checked_mul(one_added).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("squared: {}", squared);
 
-    let amount_divided = amount.checked_mul(INITIAL_PRICE_DIVIDER).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("amount_divided: {}", amount_divided);
+//     let amount_divided = amount.checked_mul(INITIAL_PRICE_DIVIDER).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("amount_divided: {}", amount_divided);
 
-    let amount_added = squared.checked_add(amount_divided).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("amount_added: {}", amount_added);
+//     let amount_added = squared.checked_add(amount_divided).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("amount_added: {}", amount_added);
 
-    // Convert to f64 for square root calculation
-    let sqrt_result = (amount_added as f64).sqrt();
-    msg!("sqrt_result: {}", sqrt_result);
+//     // Convert to f64 for square root calculation
+//     let sqrt_result = (amount_added as f64).sqrt();
+//     msg!("sqrt_result: {}", sqrt_result);
 
-    // Check if sqrt_result can be converted back to u64 safely
-    if sqrt_result < 0.0 {
-        msg!("Error: Negative sqrt_result");
-        return err!(CustomError::NegativeNumber);
-    }
+//     // Check if sqrt_result can be converted back to u64 safely
+//     if sqrt_result < 0.0 {
+//         msg!("Error: Negative sqrt_result");
+//         return err!(CustomError::NegativeNumber);
+//     }
 
-    let sqrt_u64 = sqrt_result as u64;
-    msg!("sqrt_u64: {}", sqrt_u64);
+//     let sqrt_u64 = sqrt_result as u64;
+//     msg!("sqrt_u64: {}", sqrt_u64);
 
-    let subtract_one = sqrt_u64.checked_sub(one_added).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("subtract_one: {}", subtract_one);
+//     let subtract_one = sqrt_u64.checked_sub(one_added).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("subtract_one: {}", subtract_one);
 
-    let amount_out = subtract_one.checked_div(2).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
-    msg!("amount_out: {}", amount_out);
-    let amount_out_decimal = amount_out.checked_mul(1000000000);
-    Ok(amount_out)
-}
+//     let amount_out = subtract_one.checked_div(2).ok_or(CustomError::OverflowOrUnderflowOccurred)?;
+//     msg!("amount_out: {}", amount_out);
+//     let amount_out_decimal = amount_out.checked_mul(1000000000);
+//     Ok(amount_out)
+// }

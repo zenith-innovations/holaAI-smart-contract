@@ -3,7 +3,7 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
 };
-use crate::{consts::TOKEN_SELL_LIMIT_PERCENT, errors::CustomError, state::{LiquidityPool, LiquidityPoolAccount}};
+use crate::{errors::CustomError, state::{LiquidityPool, LiquidityPoolAccount}};
 
 pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
@@ -25,7 +25,16 @@ pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
         &ctx.accounts.token_program,
         &ctx.accounts.system_program,
     )?;
+
+    emit!(LiquidityRemoved {
+        pool: ctx.accounts.pool.key(),
+    });
     Ok(())
+}
+
+#[event]
+pub struct LiquidityRemoved {
+    pub pool: Pubkey,
 }
 
 #[derive(Accounts)]
