@@ -67,7 +67,7 @@ impl LiquidityPool {
 #[event]
 pub struct TradeEvent {
     pub pool: Pubkey,
-    pub token_mint: Pubkey, 
+    pub token_mint: Pubkey,
     pub amount_in: u64,
     pub amount_out: u64,
     pub reserve_token_before: u64,
@@ -174,6 +174,12 @@ pub trait LiquidityPoolAccount<'info> {
         bump: u8,
         system_program: &Program<'info, System>,
     ) -> Result<()>;
+
+    fn calculate_buy_amount(&self, amount_in: u64) -> Result<u64>;
+
+    fn calculate_sell_amount(&self, token_amount: u64) -> Result<u64>;
+
+    fn calculate_market_cap(&self) -> Result<u64>;
 }
 
 impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
@@ -243,7 +249,6 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
 
     fn buy(
         &mut self,
-        // _bonding_configuration_account: &Account<'info, CurveConfiguration>,
         token_accounts: (
             &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
@@ -255,36 +260,12 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         token_program: &Program<'info, Token>,
         system_program: &Program<'info, System>,
     ) -> Result<()> {
-        if amount == 0 {
-            return err!(CustomError::InvalidAmount);
-        }
-
-        msg!("Trying to buy from the pool");
-
-        let bought_amount =
-            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
-        msg!("bought_amount {}", bought_amount);
-
-        let root_val = (PROPORTION as f64 * amount as f64 / 1_000_000_000.0
-            + bought_amount * bought_amount)
-            .sqrt();
-        msg!("root_val {}", root_val);
-
-        let amount_out_f64 = (root_val - bought_amount as f64) * 1_000_000.0 * 1_000_000_000.0;
-        msg!("amount_out_f64 {}", amount_out_f64);
-
-        let amount_out = amount_out_f64.round() as u64;
-        msg!("amount_out {}", amount_out);
-
-        if amount_out > self.reserve_token {
-            return err!(CustomError::NotEnoughTokenInVault);
-        }
+        let amount_out = self.calculate_buy_amount(amount)?;
 
         self.reserve_sol += amount;
         self.reserve_token -= amount_out;
 
         self.transfer_sol_to_pool(authority, pool_sol_vault, amount, system_program)?;
-
         self.transfer_token_from_pool(
             token_accounts.1,
             token_accounts.2,
@@ -296,13 +277,14 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             pool: self.key(),
             token_mint: token_accounts.0.key(),
             amount_in: amount,
-            amount_out: amount_out,
-            reserve_sol_before: self.reserve_sol,
+            amount_out,
+            reserve_sol_before: self.reserve_sol - amount,
             reserve_sol_after: self.reserve_sol,
-            reserve_token_before: self.reserve_token,
+            reserve_token_before: self.reserve_token + amount_out,
             reserve_token_after: self.reserve_token,
             is_buy: true,
         });
+
         Ok(())
     }
 
@@ -320,57 +302,29 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         token_program: &Program<'info, Token>,
         system_program: &Program<'info, System>,
     ) -> Result<()> {
-        if amount == 0 {
-            return err!(CustomError::InvalidAmount);
-        }
-
-        if self.reserve_token < amount {
-            return err!(CustomError::TokenAmountToSellTooBig);
-        }
-
-        let bought_amount =
-            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
-        msg!("bought_amount: {}", bought_amount);
-
-        let result_amount = (self.total_supply as f64 - self.reserve_token as f64 - amount as f64)
-            / 1_000_000.0
-            / 1_000_000_000.0;
-        msg!("result_amount: {}", result_amount);
-
-        let amount_out_f64 = (bought_amount * bought_amount - result_amount * result_amount)
-            / PROPORTION as f64
-            * 1_000_000_000.0;
-        msg!("amount_out_f64: {}", amount_out_f64);
-
-        let amount_out = amount_out_f64.round() as u64;
-        msg!("amount_out: {}", amount_out);
-
-        if self.reserve_sol < amount_out {
-            return err!(CustomError::NotEnoughSolInVault);
-        }
-
-        self.transfer_token_to_pool(
-            token_accounts.2,
-            token_accounts.1,
-            amount as u64,
-            authority,
-            token_program,
-        )?;
+        let amount_out = self.calculate_sell_amount(amount)?;
 
         self.reserve_token += amount;
         self.reserve_sol -= amount_out;
 
+        self.transfer_token_to_pool(
+            token_accounts.2,
+            token_accounts.1,
+            amount,
+            authority,
+            token_program,
+        )?;
         self.transfer_sol_from_pool(pool_sol_vault, authority, amount_out, bump, system_program)?;
 
         emit!(TradeEvent {
             pool: self.key(),
             token_mint: token_accounts.0.key(),
             amount_in: amount,
-            amount_out: amount_out,
-            reserve_token_before: self.reserve_token,
-            reserve_token_after: self.reserve_token,
-            reserve_sol_before: self.reserve_sol,
+            amount_out,
+            reserve_sol_before: self.reserve_sol + amount_out,
             reserve_sol_after: self.reserve_sol,
+            reserve_token_before: self.reserve_token - amount,
+            reserve_token_after: self.reserve_token,
             is_buy: false,
         });
 
@@ -475,5 +429,69 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             amount,
         )?;
         Ok(())
+    }
+
+    fn calculate_buy_amount(&self, amount_in: u64) -> Result<u64> {
+        if amount_in == 0 {
+            return err!(CustomError::InvalidAmount);
+        }
+
+        let bought_amount =
+            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
+
+        let root_val = (PROPORTION as f64 * amount_in as f64 / 1_000_000_000.0
+            + bought_amount * bought_amount)
+            .sqrt();
+
+        let amount_out =
+            ((root_val - bought_amount) * 1_000_000.0 * 1_000_000_000.0).round() as u64;
+
+        if amount_out > self.reserve_token {
+            return err!(CustomError::NotEnoughTokenInVault);
+        }
+
+        Ok(amount_out)
+    }
+
+    fn calculate_sell_amount(&self, token_amount: u64) -> Result<u64> {
+        if token_amount == 0 {
+            return err!(CustomError::InvalidAmount);
+        }
+
+        if self.reserve_token < token_amount {
+            return err!(CustomError::TokenAmountToSellTooBig);
+        }
+
+        let bought_amount =
+            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
+
+        let result_amount =
+            (self.total_supply as f64 - self.reserve_token as f64 - token_amount as f64)
+                / 1_000_000.0
+                / 1_000_000_000.0;
+
+        let amount_out = ((bought_amount * bought_amount - result_amount * result_amount)
+            / PROPORTION as f64
+            * 1_000_000_000.0)
+            .round() as u64;
+
+        if self.reserve_sol < amount_out {
+            return err!(CustomError::NotEnoughSolInVault);
+        }
+
+        Ok(amount_out)
+    }
+
+    fn calculate_market_cap(&self) -> Result<u64> {
+        // Tính số token đã bán
+        let sold_amount = (self.total_supply - self.reserve_token) as f64 / 1_000_000_000.0;
+        
+        // Tính giá hiện tại theo công thức tương tự sell
+        let current_price = sold_amount / PROPORTION as f64;
+
+        // Market cap = current_price * circulating supply * 10^9 (chuyển về lamports)
+        let market_cap = (current_price * sold_amount * 1_000_000_000.0).round() as u64;
+
+        Ok(market_cap)
     }
 }

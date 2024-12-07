@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 
+pub mod consts;
 pub mod errors;
-pub mod utils;
 pub mod instructions;
 pub mod state;
-pub mod consts;
+pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("3RgwNfTHPGqMMosCNmQjoCbrMsume9ACSCUmWsbfdW1q");
+declare_id!("8pjqbSdygweTeMQR9DkC5TNtErq2RsHL49DmcERPzvtQ");
 
 #[program]
 pub mod bonding_curve {
@@ -22,9 +22,7 @@ pub mod bonding_curve {
         instructions::create_pool(ctx)
     }
 
-    pub fn add_liquidity(
-        ctx: Context<AddLiquidity>,
-    ) -> Result<()> {
+    pub fn add_liquidity(ctx: Context<AddLiquidity>) -> Result<()> {
         instructions::add_liquidity(ctx)
     }
 
@@ -40,6 +38,18 @@ pub mod bonding_curve {
         instructions::sell(ctx, amount, bump)
     }
 
+    pub fn calculate_buy_amount(ctx: Context<Calculate>, amount_in: u64) -> Result<u64> {
+        instructions::calculate_buy_amount(ctx, amount_in)
+    }
+
+    pub fn calculate_sell_amount(ctx: Context<Calculate>, token_amount: u64) -> Result<u64> {
+        instructions::calculate_sell_amount(ctx, token_amount)
+    }
+
+    pub fn calculate_market_cap(ctx: Context<Calculate>) -> Result<u64> {
+        instructions::calculate_market_cap(ctx)
+    }
+
     pub fn create_token(
         ctx: Context<CreateToken>,
         name: String,
@@ -48,6 +58,4 @@ pub mod bonding_curve {
     ) -> Result<()> {
         instructions::create_token(ctx, name, symbol, off_chain_id)
     }
-    
 }
-
