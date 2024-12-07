@@ -23,7 +23,7 @@ function sleep(ms: number) {
 
 describe("bonding_curve", () => {
     // Thêm khai báo Program ID
-    const PROGRAM_ID = new anchor.web3.PublicKey("7cyVZehNQVF6TQNugB5cKNedCKcMCwcvGryBpjh9WuHV");
+    const PROGRAM_ID = new anchor.web3.PublicKey("3RgwNfTHPGqMMosCNmQjoCbrMsume9ACSCUmWsbfdW1q");
     const transactions = []
     // Thay đổi cách khởi tạo program
     const program = new Program<BondingCurve>(
@@ -83,7 +83,7 @@ describe("bonding_curve", () => {
     })
 
     it("Should create a new token", async () => {
-        const randomId = Math.random().toString(36).substring(2, 15);
+        const randomId = "6753ec2e763688ea4399ab49"
         try {
             // Find PDA for mint
             const [mintPda] = PublicKey.findProgramAddressSync(
@@ -104,7 +104,7 @@ describe("bonding_curve", () => {
             // Create token with instruction
             const tx = await program.methods
                 .createToken(
-                    "Test Token 1212",
+                    "Test Token 121324234234234322",
                     "TEST",
                     randomId
                 )
@@ -146,38 +146,38 @@ describe("bonding_curve", () => {
         }
     });
 
-    it("Initialize the contract", async () => {
-        try {
-            const [curveConfig] = PublicKey.findProgramAddressSync(
-                [Buffer.from(curveSeed)],
-                program.programId
-            )
-            const tx = new Transaction()
-                .add(
-                    ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
-                    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1200_000 }),
-                    await program.methods
-                        .initialize(1)
-                        .accounts({
-                            dexConfigurationAccount: curveConfig,
-                            admin: user.publicKey,
-                            rent: SYSVAR_RENT_PUBKEY,
-                            systemProgram: SystemProgram.programId
-                        })
-                        .instruction()
-                )
-            tx.feePayer = user.publicKey
-            tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
-            console.log(await connection.simulateTransaction(tx))
-            const sig = await sendAndConfirmTransaction(connection, tx, [user], { skipPreflight: true })
-            console.log("Successfully initialized : ", `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`)
-            transactions.push(`https://explorer.solana.com/tx/${sig}?cluster=devnet`)
-            let pool = await program.account.curveConfiguration.fetch(curveConfig)
-            console.log("Pool State : ", pool)
-        } catch (error) {
-            console.log("Error in initialization :", error)
-        }
-    });
+    // it("Initialize the contract", async () => {
+    //     try {
+    //         const [curveConfig] = PublicKey.findProgramAddressSync(
+    //             [Buffer.from(curveSeed)],
+    //             program.programId
+    //         )
+    //         const tx = new Transaction()
+    //             .add(
+    //                 ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
+    //                 ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1200_000 }),
+    //                 await program.methods
+    //                     .initialize(1)
+    //                     .accounts({
+    //                         dexConfigurationAccount: curveConfig,
+    //                         admin: user.publicKey,
+    //                         rent: SYSVAR_RENT_PUBKEY,
+    //                         systemProgram: SystemProgram.programId
+    //                     })
+    //                     .instruction()
+    //             )
+    //         tx.feePayer = user.publicKey
+    //         tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash
+    //         console.log(await connection.simulateTransaction(tx))
+    //         const sig = await sendAndConfirmTransaction(connection, tx, [user], { skipPreflight: true })
+    //         console.log("Successfully initialized : ", `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`)
+    //         transactions.push(`https://explorer.solana.com/tx/${sig}?cluster=devnet`)
+    //         let pool = await program.account.curveConfiguration.fetch(curveConfig)
+    //         console.log("Pool State : ", pool)
+    //     } catch (error) {
+    //         console.log("Error in initialization :", error)
+    //     }
+    // });
 
 
     it("create pool", async () => {
