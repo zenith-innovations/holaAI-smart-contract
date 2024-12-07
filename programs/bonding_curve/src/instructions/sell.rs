@@ -9,22 +9,21 @@ use crate::state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount};
 pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
 
-    let token_one_accounts = (
+    let token_accounts = (
         &mut *ctx.accounts.token_mint,
         &mut *ctx.accounts.pool_token_account,
         &mut *ctx.accounts.user_token_account,
+        &mut *ctx.accounts.exchange_token_mint,
+        &mut *ctx.accounts.pool_exchange_token_account,
+        &mut *ctx.accounts.user_exchange_token_account,
     );
 
     pool.sell(
-        &ctx.accounts.dex_configuration_account,
-        &ctx.accounts.fee_collector,
-        token_one_accounts,
-        &mut ctx.accounts.pool_sol_vault,
+        token_accounts,
         amount,
-        bump,
         &ctx.accounts.user,
+        bump,
         &ctx.accounts.token_program,
-        &ctx.accounts.system_program,
     )?;
     Ok(())
 }
@@ -65,17 +64,27 @@ pub struct Sell<'info> {
     /// CHECK:
     #[account(
         mut,
-        seeds = [LiquidityPool::SOL_VAULT_PREFIX.as_bytes(), token_mint.key().as_ref()],
-        bump
-    )]
-    pub pool_sol_vault: AccountInfo<'info>,
-
-    #[account(
-        mut,
         associated_token::mint = token_mint,
         associated_token::authority = user,
     )]
     pub user_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub exchange_token_mint: Box<Account<'info, Mint>>,
+
+    #[account(
+        mut,
+        associated_token::mint = exchange_token_mint,
+        associated_token::authority = pool
+    )]
+    pub pool_exchange_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        associated_token::mint = exchange_token_mint,
+        associated_token::authority = user,
+    )]
+    pub user_exchange_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub user: Signer<'info>,

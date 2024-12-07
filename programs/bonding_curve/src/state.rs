@@ -39,35 +39,35 @@ impl LiquidityProvider {
 
 #[account]
 pub struct LiquidityPool {
-    pub creator: Pubkey,    // Public key of the pool creator
-    pub token: Pubkey,      // Public key of the token in the liquidity pool
-    pub total_supply: u64,  // Total supply of liquidity tokens
-    pub reserve_token: u64, // Reserve amount of token in the pool
-    pub reserve_sol: u64,   // Reserve amount of sol_token in the pool
-    pub bump: u8,           // Nonce for the program-derived address
+    pub creator: Pubkey,
+    pub token: Pubkey,          // Regular token mint
+    pub exchange_token: Pubkey, // Exchange token mint (replacing SOL)
+    pub total_supply: u64,
+    pub reserve_token: u64,     // Reserve amount of regular token
+    pub reserve_exchange: u64,  // Reserve amount of exchange token (replacing reserve_exchange)
+    pub bump: u8,
 }
 
 impl LiquidityPool {
     pub const POOL_SEED_PREFIX: &'static str = "liquidity_pool";
-    pub const SOL_VAULT_PREFIX: &'static str = "liquidity_sol_vault";
 
     // Discriminator (8) + Pubkey (32) + Pubkey (32) + totalsupply (8)
     // + reserve one (8) + reserve two (8) + Bump (1)
     pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 1;
 
     // Constructor to initialize a LiquidityPool with two tokens and a bump for the PDA
-    pub fn new(creator: Pubkey, token: Pubkey, bump: u8) -> Self {
+    pub fn new(creator: Pubkey, token: Pubkey, exchange_token: Pubkey, bump: u8) -> Self {
         Self {
             creator,
             token,
+            exchange_token,
             total_supply: 0_u64,
             reserve_token: 0_u64,
-            reserve_sol: 0_u64,
+            reserve_exchange: 0_u64,
             bump,
         }
     }
 }
-
 #[event]
 pub struct TradeEvent {
     pub pool: Pubkey,
@@ -83,20 +83,21 @@ pub struct TradeEvent {
 
 pub trait LiquidityPoolAccount<'info> {
     // Updates the token reserves in the liquidity pool
-    fn update_reserves(&mut self, reserve_token: u64, reserve_sol: u64) -> Result<()>;
+    fn update_reserves(&mut self, reserve_token: u64, reserve_exchange: u64) -> Result<()>;
 
     // Allows adding liquidity by depositing an amount of two tokens and getting back pool shares
     fn add_liquidity(
         &mut self,
         token_accounts: (
-            &mut Account<'info, Mint>,
-            &mut Account<'info, TokenAccount>,
-            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,    // token_mint
+            &mut Account<'info, TokenAccount>, // pool_token_account
+            &mut Account<'info, TokenAccount>, // user_token_account
+            &mut Account<'info, Mint>,    // exchange_token_mint
+            &mut Account<'info, TokenAccount>, // pool_exchange_token_account
+            &mut Account<'info, TokenAccount>, // user_exchange_token_account
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()>;
 
     // Allows removing liquidity by burning pool shares and receiving back a proportionate amount of tokens
@@ -106,12 +107,13 @@ pub trait LiquidityPoolAccount<'info> {
             &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
             &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
         ),
-        pool_sol_account: &mut AccountInfo<'info>,
         authority: &Signer<'info>,
         bump: u8,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()>;
 
     fn buy(
@@ -120,6 +122,9 @@ pub trait LiquidityPoolAccount<'info> {
         fee_collector: &AccountInfo<'info>,
         token_accounts: (
             &mut Account<'info, Mint>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
+                        &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
             &mut Account<'info, TokenAccount>,
         ),
@@ -165,23 +170,6 @@ pub trait LiquidityPoolAccount<'info> {
         token_program: &Program<'info, Token>,
     ) -> Result<()>;
 
-    fn transfer_sol_to_pool(
-        &self,
-        from: &Signer<'info>,
-        to: &mut AccountInfo<'info>,
-        amount: u64,
-        system_program: &Program<'info, System>,
-    ) -> Result<()>;
-
-    fn transfer_sol_from_pool(
-        &self,
-        from: &mut AccountInfo<'info>,
-        to: &Signer<'info>,
-        amount: u64,
-        bump: u8,
-        system_program: &Program<'info, System>,
-    ) -> Result<()>;
-
     fn transfer_sol_to_fee_collector(
         &self,
         from: &AccountInfo<'info>,
@@ -199,18 +187,21 @@ pub trait LiquidityPoolAccount<'info> {
 }
 
 impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
-    fn update_reserves(&mut self, reserve_token: u64, reserve_sol: u64) -> Result<()> {
+    fn update_reserves(&mut self, reserve_token: u64, reserve_exchange: u64) -> Result<()> {
         self.reserve_token = reserve_token;
-        self.reserve_sol = reserve_sol;
+        self.reserve_exchange = reserve_exchange;
         Ok(())
     }
 
     fn add_liquidity(
         &mut self,
         token_accounts: (
-            &mut Account<'info, Mint>,
-            &mut Account<'info, TokenAccount>,
-            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,    // token_mint
+            &mut Account<'info, TokenAccount>, // pool_token_account
+            &mut Account<'info, TokenAccount>, // user_token_account
+            &mut Account<'info, Mint>,    // exchange_token_mint
+            &mut Account<'info, TokenAccount>, // pool_exchange_token_account
+            &mut Account<'info, TokenAccount>, // user_exchange_token_account
         ),
         pool_sol_vault: &mut AccountInfo<'info>,
         authority: &Signer<'info>,
@@ -225,11 +216,12 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             token_program,
         )?;
 
-        self.transfer_sol_to_pool(
+        self.transfer_token_to_pool(
+            token_accounts.5,  // user_exchange_token_account
+            token_accounts.4,  // pool_exchange_token_account
+            token_accounts.3.supply,  // amount of exchange token
             authority,
-            pool_sol_vault,
-            INITIAL_LAMPORTS_FOR_POOL,
-            system_program,
+            token_program,
         )?;
         self.total_supply = 1_000_000_000_000_000_000;
         self.update_reserves(token_accounts.0.supply, INITIAL_LAMPORTS_FOR_POOL)?;
@@ -542,7 +534,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             .round() as u64;
 
         if self.reserve_sol < amount_out {
-            return err!(CustomError::NotEnoughSolInVault);
+            return err!(CustomError::NotEnoughExchangeTokenInVault);
         }
 
         Ok(amount_out)

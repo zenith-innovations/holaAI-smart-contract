@@ -1,9 +1,12 @@
+use crate::{
+    errors::CustomError,
+    state::{LiquidityPool, LiquidityPoolAccount},
+};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
 };
-use crate::{errors::CustomError, state::{LiquidityPool, LiquidityPoolAccount}};
 
 pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
@@ -15,6 +18,9 @@ pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
         &mut *ctx.accounts.token_mint,
         &mut *ctx.accounts.pool_token_account,
         &mut *ctx.accounts.user_token_account,
+        &mut *ctx.accounts.exchange_token_mint,
+        &mut *ctx.accounts.pool_exchange_token_account,
+        &mut *ctx.accounts.user_exchange_token_account,
     );
 
     pool.remove_liquidity(
@@ -41,13 +47,20 @@ pub struct LiquidityRemoved {
 pub struct RemoveLiquidity<'info> {
     #[account(
         mut,
-       seeds = [LiquidityPool::POOL_SEED_PREFIX.as_bytes(), token_mint.key().as_ref()],
+        seeds = [
+            LiquidityPool::POOL_SEED_PREFIX.as_bytes(), 
+            token_mint.key().as_ref(),
+            exchange_token_mint.key().as_ref()
+        ],
         bump = pool.bump
     )]
     pub pool: Box<Account<'info, LiquidityPool>>,
 
     #[account(mut)]
     pub token_mint: Box<Account<'info, Mint>>,
+
+        #[account(mut)]
+    pub exchange_token_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
@@ -56,6 +69,13 @@ pub struct RemoveLiquidity<'info> {
     )]
     pub pool_token_account: Box<Account<'info, TokenAccount>>,
 
+        #[account(
+        mut,
+        associated_token::mint = exchange_token_mint,
+        associated_token::authority = pool
+    )]
+    pub pool_exchange_token_account: Box<Account<'info, TokenAccount>>,
+
     #[account(
         mut,
         associated_token::mint = token_mint,
@@ -63,17 +83,15 @@ pub struct RemoveLiquidity<'info> {
     )]
     pub user_token_account: Box<Account<'info, TokenAccount>>,
 
-    /// CHECK:
     #[account(
         mut,
-        seeds = [LiquidityPool::SOL_VAULT_PREFIX.as_bytes(), token_mint.key().as_ref()],
-        bump
+        associated_token::mint = exchange_token_mint,
+        associated_token::authority = user,
     )]
-    pub pool_sol_vault: AccountInfo<'info>,
+    pub user_exchange_token_account: Box<Account<'info, TokenAccount>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
-    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

@@ -10,8 +10,8 @@ import { ASSOCIATED_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@coral-xyz/anchor/dist/
 import { ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { BondingCurve, IDL } from "../target/types/bonding_curve";
 
-const connection = new Connection("https://devnet.helius-rpc.com/?api-key=b7e6f48d-5fc8-4da5-90e4-7827b60ba575", "confirmed")
-// const connection = new Connection("http://localhost:8899", "confirmed")
+// const connection = new Connection("https://devnet.helius-rpc.com/?api-key=b7e6f48d-5fc8-4da5-90e4-7827b60ba575", "confirmed")
+const connection = new Connection("http://localhost:8899", "confirmed")
 const curveSeed = "CurveConfiguration"
 const POOL_SEED_PREFIX = "liquidity_pool"
 const LIQUIDITY_SEED = "LiqudityProvider"

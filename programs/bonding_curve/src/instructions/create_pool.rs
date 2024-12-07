@@ -11,6 +11,7 @@ pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
     pool.set_inner(LiquidityPool::new(
         ctx.accounts.payer.key(),
         ctx.accounts.token_mint.key(),
+        ctx.accounts.exchange_token_mint.key(),
         ctx.bumps.pool,
     ));
 
@@ -33,13 +34,16 @@ pub struct CreateLiquidityPool<'info> {
         init,
         space = LiquidityPool::ACCOUNT_SIZE,
         payer = payer,
-        seeds = [LiquidityPool::POOL_SEED_PREFIX.as_bytes(), token_mint.key().as_ref()],
+        seeds = [LiquidityPool::POOL_SEED_PREFIX.as_bytes(), token_mint.key().as_ref(), exchange_token_mint.key().as_ref()],
         bump
     )]
     pub pool: Box<Account<'info, LiquidityPool>>,
 
     #[account(mut)]
     pub token_mint: Box<Account<'info, Mint>>,
+
+    #[account(mut)]
+    pub exchange_token_mint: Box<Account<'info, Mint>>,
 
     #[account(
         init,
@@ -49,10 +53,17 @@ pub struct CreateLiquidityPool<'info> {
     )]
     pub pool_token_account: Box<Account<'info, TokenAccount>>,
 
+    #[account(
+        init,
+        payer = payer,
+        associated_token::mint = exchange_token_mint,
+        associated_token::authority = pool
+    )]
+    pub pool_exchange_token_account: Box<Account<'info, TokenAccount>>,
+
     #[account(mut)]
     pub payer: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
-    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
 }

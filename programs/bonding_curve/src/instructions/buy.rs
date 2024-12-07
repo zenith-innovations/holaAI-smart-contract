@@ -9,14 +9,17 @@ use crate::state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount};
 pub fn buy(ctx: Context<Buy>, amount: u64, bump: u8) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
 
-    let token_one_accounts = (
-        &mut *ctx.accounts.token_mint,
-        &mut *ctx.accounts.pool_token_account,
-        &mut *ctx.accounts.user_token_account,
+    let token_accounts = (
+        &mut *ctx.accounts.output_token_mint,
+        &mut *ctx.accounts.pool_output_token_account,
+        &mut *ctx.accounts.user_output_token_account,
+        &mut *ctx.accounts.input_token_mint,
+        &mut *ctx.accounts.pool_input_token_account,
+        &mut *ctx.accounts.user_input_token_account,
     );
 
     pool.buy(
-        &ctx.accounts.dex_configuration_account,
+        token_accounts,
         &ctx.accounts.fee_collector,
         token_one_accounts,
         &mut ctx.accounts.pool_sol_vault,
@@ -47,36 +50,45 @@ pub struct Buy<'info> {
 
     #[account(
         mut,
-        seeds = [LiquidityPool::POOL_SEED_PREFIX.as_bytes(), token_mint.key().as_ref()],
+        seeds = [LiquidityPool::POOL_SEED_PREFIX.as_bytes(), output_token_mint.key().as_ref(), input_token_mint.key().as_ref()],
         bump = pool.bump
     )]
     pub pool: Box<Account<'info, LiquidityPool>>,
 
     #[account(mut)]
-    pub token_mint: Box<Account<'info, Mint>>,
+    pub output_token_mint: Box<Account<'info, Mint>>,
 
     #[account(
         mut,
-        associated_token::mint = token_mint,
+        associated_token::mint = output_token_mint,
         associated_token::authority = pool
     )]
-    pub pool_token_account: Box<Account<'info, TokenAccount>>,
+    pub pool_output_token_account: Box<Account<'info, TokenAccount>>,
 
     /// CHECK:
     #[account(
-        mut,
-        seeds = [LiquidityPool::SOL_VAULT_PREFIX.as_bytes(), token_mint.key().as_ref()],
-        bump
-    )]
-    pub pool_sol_vault: AccountInfo<'info>,
-
-    #[account(
         init_if_needed,
         payer = user,
-        associated_token::mint = token_mint,
+        associated_token::mint = output_token_mint,
         associated_token::authority = user,
     )]
-    pub user_token_account: Box<Account<'info, TokenAccount>>,
+    pub user_output_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        associated_token::mint = input_token_mint,
+        associated_token::authority = pool
+    )]
+    pub pool_input_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        associated_token::mint = input_token_mint,
+        associated_token::authority = user
+    )]
+    pub user_input_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    pub input_token_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
