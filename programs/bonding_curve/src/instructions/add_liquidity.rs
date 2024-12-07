@@ -20,10 +20,8 @@ pub fn add_liquidity(ctx: Context<AddLiquidity>) -> Result<()> {
 
     pool.add_liquidity(
         token_accounts,
-        &mut ctx.accounts.pool_sol_vault,
         &ctx.accounts.user,
         &ctx.accounts.token_program,
-        &ctx.accounts.system_program,
     )?;
     Ok(())
 }
@@ -61,7 +59,6 @@ pub struct AddLiquidity<'info> {
     )]
     pub pool_exchange_token_account: Box<Account<'info, TokenAccount>>,
 
-
     #[account(
         mut,
         associated_token::mint = token_mint,
@@ -69,7 +66,6 @@ pub struct AddLiquidity<'info> {
     )]
     pub user_token_account: Box<Account<'info, TokenAccount>>,
 
-    /// CHECK:
     #[account(
         mut,
         associated_token::mint = exchange_token_mint,
@@ -79,7 +75,7 @@ pub struct AddLiquidity<'info> {
 
     #[account(mut)]
     pub user: Signer<'info>,
-    pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
 }

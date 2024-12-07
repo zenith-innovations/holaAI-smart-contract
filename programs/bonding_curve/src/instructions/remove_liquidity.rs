@@ -25,11 +25,9 @@ pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
 
     pool.remove_liquidity(
         token_accounts,
-        &mut ctx.accounts.pool_sol_vault,
         &ctx.accounts.user,
         bump,
         &ctx.accounts.token_program,
-        &ctx.accounts.system_program,
     )?;
 
     emit!(LiquidityRemoved {

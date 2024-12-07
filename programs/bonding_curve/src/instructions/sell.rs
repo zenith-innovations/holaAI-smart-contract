@@ -37,16 +37,13 @@ pub struct Sell<'info> {
     )]
     pub dex_configuration_account: Box<Account<'info, CurveConfiguration>>,
 
-    /// CHECK: This is the fee collector account
     #[account(
         mut,
-        constraint = fee_collector.key() == dex_configuration_account.fee_collector
-    )]
-    pub fee_collector: AccountInfo<'info>,
-
-    #[account(
-        mut,
-        seeds = [LiquidityPool::POOL_SEED_PREFIX.as_bytes(), token_mint.key().as_ref()],
+        seeds = [
+            LiquidityPool::POOL_SEED_PREFIX.as_bytes(), 
+            token_mint.key().as_ref(),  // Regular token mint first
+            exchange_token_mint.key().as_ref()  // Exchange token mint second
+        ],
         bump = pool.bump
     )]
     pub pool: Box<Account<'info, LiquidityPool>>,

@@ -14,18 +14,7 @@ pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
         ctx.accounts.exchange_token_mint.key(),
         ctx.bumps.pool,
     ));
-
-    emit!(PoolCreated {
-        pool: ctx.accounts.pool.key(),
-        token_mint: ctx.accounts.token_mint.key(),
-    });
     Ok(())
-}
-
-#[event]
-pub struct PoolCreated {
-    pub pool: Pubkey,
-    pub token_mint: Pubkey,
 }
 
 #[derive(Accounts)]
@@ -65,5 +54,6 @@ pub struct CreateLiquidityPool<'info> {
     pub payer: Signer<'info>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
 }

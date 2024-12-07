@@ -8,14 +8,14 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("EPt6ruottQ3o58rk6vJYDzfRQDdMkDsY21ojWyKGZvih");
+declare_id!("2PvLxLoqSGDCadPKZNrJMnuUiVBxdWhBpZjTu8rmC28L");
 
 #[program]
 pub mod bonding_curve {
     use super::*;
 
-    pub fn initialize(ctx: Context<InitializeCurveConfiguration>, fee: f64, fee_collector: Pubkey) -> Result<()> {
-        instructions::initialize(ctx, fee, fee_collector)
+    pub fn initialize(ctx: Context<InitializeCurveConfiguration>, fee: f64) -> Result<()> {
+        instructions::initialize(ctx, fee)
     }
 
     pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
@@ -30,24 +30,12 @@ pub mod bonding_curve {
         instructions::remove_liquidity(ctx, bump)
     }
 
-    pub fn buy(ctx: Context<Buy>, amount: u64, bump: u8) -> Result<()> {
-        instructions::buy(ctx, amount, bump)
+    pub fn buy(ctx: Context<Buy>, amount: u64) -> Result<()> {
+        instructions::buy(ctx, amount)
     }
 
     pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
         instructions::sell(ctx, amount, bump)
-    }
-
-    pub fn calculate_buy_amount(ctx: Context<Calculate>, amount_in: u64) -> Result<u64> {
-        instructions::calculate_buy_amount(ctx, amount_in)
-    }
-
-    pub fn calculate_sell_amount(ctx: Context<Calculate>, token_amount: u64) -> Result<u64> {
-        instructions::calculate_sell_amount(ctx, token_amount)
-    }
-
-    pub fn calculate_market_cap(ctx: Context<Calculate>) -> Result<u64> {
-        instructions::calculate_market_cap(ctx)
     }
 
     pub fn create_token(
