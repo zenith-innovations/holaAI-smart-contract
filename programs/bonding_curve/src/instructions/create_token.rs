@@ -15,25 +15,26 @@ pub fn create_token(
     name: String,
     symbol: String,
     off_chain_id: String,
+    is_agent: bool,
 ) -> Result<()> {
     let name_ref = &name;
     let symbol_ref = &symbol;
     let off_chain_id_ref = &off_chain_id;
 
-    system_program::transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            system_program::Transfer {
-                from: ctx.accounts.user.to_account_info(),
-                to: ctx.accounts.fee_collector.to_account_info(),
-            },
-        ),
-        CREATION_FEE,
-    )?;
+    if is_agent {
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.user.to_account_info(),
+                    to: ctx.accounts.fee_collector.to_account_info(),
+                },
+            ),
+            CREATION_FEE,
+        )?;
+    }
 
     let decimals: u8 = 9;
-
-    // Set the amount of tokens to mint
     let amount = 1_000_000_000 * u64::pow(10, decimals as u32);
 
     // Mint the tokens to the user's token account
@@ -43,7 +44,6 @@ pub fn create_token(
         authority: ctx.accounts.user.to_account_info(),
     };
     let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-    token::mint_to(cpi_ctx, amount)?;
 
     create_metadata_accounts_v3(
         CpiContext::new(
@@ -65,12 +65,15 @@ pub fn create_token(
             seller_fee_basis_points: 0,
             creators: None,
             collection: None,
-            uses: None,
+            uses: None
         },
         false, // Is mutable
-        false,  // Update authority is signer
+        false, // Update authority is signer
         None,  // Collection details
     )?;
+
+    token::mint_to(cpi_ctx, amount)?;
+
 
     emit!(TokenCreated {
         mint: ctx.accounts.mint.key(),
@@ -134,7 +137,7 @@ pub struct CreateToken<'info> {
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     pub token_metadata_program: Program<'info, Metadata>,
-    
+
     /// CHECK: This is the fee collector account
     #[account(
         mut,

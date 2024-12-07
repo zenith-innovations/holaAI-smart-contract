@@ -8,14 +8,14 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("8pjqbSdygweTeMQR9DkC5TNtErq2RsHL49DmcERPzvtQ");
+declare_id!("EPt6ruottQ3o58rk6vJYDzfRQDdMkDsY21ojWyKGZvih");
 
 #[program]
 pub mod bonding_curve {
     use super::*;
 
-    pub fn initialize(ctx: Context<InitializeCurveConfiguration>, fee: f64) -> Result<()> {
-        instructions::initialize(ctx, fee)
+    pub fn initialize(ctx: Context<InitializeCurveConfiguration>, fee: f64, fee_collector: Pubkey) -> Result<()> {
+        instructions::initialize(ctx, fee, fee_collector)
     }
 
     pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
@@ -30,8 +30,8 @@ pub mod bonding_curve {
         instructions::remove_liquidity(ctx, bump)
     }
 
-    pub fn buy(ctx: Context<Buy>, amount: u64) -> Result<()> {
-        instructions::buy(ctx, amount)
+    pub fn buy(ctx: Context<Buy>, amount: u64, bump: u8) -> Result<()> {
+        instructions::buy(ctx, amount, bump)
     }
 
     pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
@@ -55,7 +55,8 @@ pub mod bonding_curve {
         name: String,
         symbol: String,
         off_chain_id: String,
+        is_agent: bool,
     ) -> Result<()> {
-        instructions::create_token(ctx, name, symbol, off_chain_id)
+        instructions::create_token(ctx, name, symbol, off_chain_id, is_agent)
     }
 }

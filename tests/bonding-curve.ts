@@ -22,7 +22,7 @@ function sleep(ms: number) {
 
 describe("bonding_curve", () => {
     // Thêm khai báo Program ID
-    const PROGRAM_ID = new anchor.web3.PublicKey("8pjqbSdygweTeMQR9DkC5TNtErq2RsHL49DmcERPzvtQ");
+    const PROGRAM_ID = new anchor.web3.PublicKey("EPt6ruottQ3o58rk6vJYDzfRQDdMkDsY21ojWyKGZvih");
     const transactions = [];
     // Thay đổi cách khởi tạo program
     const program = new Program<BondingCurve>(
@@ -126,7 +126,8 @@ describe("bonding_curve", () => {
                 .createToken(
                     "Test Token 121324234234234322",
                     "TEST",
-                    randomId
+                    randomId,
+                    true
                 )
                 .accounts({
                     mint: mintPda,
@@ -181,7 +182,7 @@ describe("bonding_curve", () => {
                     ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
                     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1200_000 }),
                     await program.methods
-                        .initialize(1)
+                        .initialize(1, new PublicKey("351g3DjKzZ1nXD4iydGBB5dFKGqF3JWs6DcvxzHAYouM"))
                         .accounts({
                             dexConfigurationAccount: curveConfig,
                             admin: user.publicKey,
@@ -313,7 +314,7 @@ describe("bonding_curve", () => {
             const userAta1 = await getAssociatedTokenAddress(
                 mint1, user.publicKey
             )
-            const [poolSolVault] = PublicKey.findProgramAddressSync(
+            const [poolSolVault, bump] = PublicKey.findProgramAddressSync(
                 [Buffer.from(SOL_VAULT_PREFIX), mint1.toBuffer()],
                 program.programId
             )
@@ -322,7 +323,7 @@ describe("bonding_curve", () => {
                     ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
                     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
                     await program.methods
-                        .buy(new BN(10 ** 8))
+                        .buy(new BN(10 ** 8), bump)
                         .accounts({
                             pool: poolPda,
                             tokenMint: mint1,
@@ -330,6 +331,7 @@ describe("bonding_curve", () => {
                             poolTokenAccount: poolToken,
                             userTokenAccount: userAta1,
                             dexConfigurationAccount: curveConfig,
+                            feeCollector: new PublicKey("351g3DjKzZ1nXD4iydGBB5dFKGqF3JWs6DcvxzHAYouM"),
                             user: user.publicKey,
                             tokenProgram: TOKEN_PROGRAM_ID,
                             associatedTokenProgram: ASSOCIATED_PROGRAM_ID,
@@ -386,6 +388,7 @@ describe("bonding_curve", () => {
                             poolTokenAccount: poolToken,
                             userTokenAccount: userAta1,
                             dexConfigurationAccount: curveConfig,
+                            feeCollector: new PublicKey("351g3DjKzZ1nXD4iydGBB5dFKGqF3JWs6DcvxzHAYouM"),
                             user: user.publicKey,
                             tokenProgram: TOKEN_PROGRAM_ID,
                             associatedTokenProgram: ASSOCIATED_PROGRAM_ID,

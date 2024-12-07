@@ -16,6 +16,8 @@ pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
     );
 
     pool.sell(
+        &ctx.accounts.dex_configuration_account,
+        &ctx.accounts.fee_collector,
         token_one_accounts,
         &mut ctx.accounts.pool_sol_vault,
         amount,
@@ -35,6 +37,13 @@ pub struct Sell<'info> {
         bump,
     )]
     pub dex_configuration_account: Box<Account<'info, CurveConfiguration>>,
+
+    /// CHECK: This is the fee collector account
+    #[account(
+        mut,
+        constraint = fee_collector.key() == dex_configuration_account.fee_collector
+    )]
+    pub fee_collector: AccountInfo<'info>,
 
     #[account(
         mut,
