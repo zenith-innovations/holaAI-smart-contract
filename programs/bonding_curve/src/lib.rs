@@ -8,7 +8,7 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("EgCVj2y8BiAEwS4SdQCyByiU52Xx8GsucabhXUmaj9fj");
+declare_id!("78A1PbFdUqHAELkD2Ja8kaYzc3sYU2VEbjtsx1sfZHgr");
 
 #[program]
 pub mod bonding_curve {
@@ -46,5 +46,25 @@ pub mod bonding_curve {
         is_agent: bool,
     ) -> Result<()> {
         instructions::create_token(ctx, name, symbol, off_chain_id, is_agent)
+    }
+
+    pub fn create_amm_config(
+        ctx: Context<CreateAmmConfig>,
+        index: u16,
+        trade_fee_rate: u64,
+        protocol_fee_rate: u64,
+        fund_fee_rate: u64,
+        create_pool_fee: u64,
+        bump: u8,
+    ) -> Result<()> {
+        instructions::proxy_create_amm_config(
+            ctx,
+            index,
+            trade_fee_rate,
+            protocol_fee_rate,
+            fund_fee_rate,
+            create_pool_fee,
+            bump,
+        )
     }
 }

@@ -43,6 +43,7 @@ pub struct LiquidityPool {
     pub bump: u8,
     pub is_listed_raydium: bool,
     pub raydium_pool: Option<Pubkey>,
+    pub amm_config: Pubkey,
 }
 
 #[event]
@@ -82,7 +83,7 @@ impl LiquidityPool {
         1; // bump: u8
 
     // Constructor to initialize a LiquidityPool with two tokens and a bump for the PDA
-    pub fn new(creator: Pubkey, token: Pubkey, exchange_token: Pubkey, bump: u8) -> Self {
+    pub fn new(creator: Pubkey, token: Pubkey, exchange_token: Pubkey, bump: u8, amm_config: Pubkey) -> Self {
         Self {
             creator,
             token,
@@ -93,6 +94,7 @@ impl LiquidityPool {
             bump,
             is_listed_raydium: false,
             raydium_pool: None,
+            amm_config,
         }
     }
 }

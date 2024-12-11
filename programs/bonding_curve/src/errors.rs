@@ -64,4 +64,7 @@ pub enum CustomError {
 
     #[msg("Invalid authority")]
     InvalidAuthority,
+
+    #[msg("Invalid owner")]
+    InvalidOwner,
 }
