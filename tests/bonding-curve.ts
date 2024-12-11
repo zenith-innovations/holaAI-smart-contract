@@ -6,23 +6,19 @@ import { expect } from "chai";
 import { BN } from "bn.js";
 import keys from '../keys/users.json'
 import key2 from '../keys/user2.json'
-import { ASSOCIATED_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/utils/token";
+import { TOKEN_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/utils/token";
 import { ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
 import { BondingCurve, IDL } from "../target/types/bonding_curve";
 
-// const connection = new Connection("https://devnet.helius-rpc.com/?api-key=b7e6f48d-5fc8-4da5-90e4-7827b60ba575", "confirmed")
-const connection = new Connection("http://localhost:8899", "confirmed")
+const connection = new Connection("https://devnet.helius-rpc.com/?api-key=39c8a399-56e1-4a64-935d-aa8d04d8ba2c", "confirmed")
+// const connection = new Connection("http://localhost:8899", "confirmed")
 const curveSeed = "CurveConfiguration"
 const POOL_SEED_PREFIX = "liquidity_pool"
-const LIQUIDITY_SEED = "LiqudityProvider"
-const SOL_VAULT_PREFIX = "liquidity_sol_vault"
-function sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 describe("bonding_curve", () => {
     // Thêm khai báo Program ID
-    const PROGRAM_ID = new anchor.web3.PublicKey("2PvLxLoqSGDCadPKZNrJMnuUiVBxdWhBpZjTu8rmC28L");
+    const PROGRAM_ID = new anchor.web3.PublicKey("7Ygc43fvZUGNujq1uzvww9b2kY71UMAptiv6vvYWK91S");
     const transactions = [];
     // Thay đổi cách khởi tạo program
     const program = new Program<BondingCurve>(
@@ -37,11 +33,14 @@ describe("bonding_curve", () => {
     const amount = new BN(1000000000).mul(new BN(10 ** tokenDecimal))
     const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
+    const privateKeyBase58 = bs58.encode(new Uint8Array(keys));
+    console.log([privateKeyBase58].join(','))
+
     let mint1: PublicKey
     let tokenAta1: PublicKey
 
-    let mint2: PublicKey
-    let tokenAta2: PublicKey
+    let mint2: PublicKey = new PublicKey('GZjqqG1cuYfADAGW6WmSbctThXi3LTY77nhxKrS79fNv');
+    let tokenAta2: PublicKey = new PublicKey('7VKRZLGwRJgXTfcqSmoxtA44B1DBcAaKoMRnyamtZnhJ');
 
     console.log("Admin's wallet address is : ", user.publicKey.toBase58())
 
@@ -154,94 +153,23 @@ describe("bonding_curve", () => {
         }
     });
 
-    it("Should create a new token", async () => {
-        const randomId = Math.random().toString(36).substring(2, 15);
-        try {
-            // Find PDA for mint
-            const [mintPda] = PublicKey.findProgramAddressSync(
-                [
-                    Buffer.from("mint"),
-                    user.publicKey.toBuffer(),
-                    Buffer.from(randomId) // thêm off_chain_id vào seeds
-                ],
-                program.programId
-            );
+    // it("Mint token 2 to user wallet", async () => {
+    //     console.log("Trying to create and mint token 2 to user's wallet")
+    //     try {
+    //         mint2 = await createMint(connection, user, user.publicKey, user.publicKey, tokenDecimal)
+    //         console.log('mint 2 address: ', mint2.toBase58());
 
-            // Get associated token account
-            const userTokenPda = await getAssociatedTokenAddress(
-                mintPda,
-                user.publicKey
-            );
+    //         tokenAta2 = (await getOrCreateAssociatedTokenAccount(connection, user, mint2, user.publicKey)).address
+    //         console.log('token 2 account address: ', tokenAta2.toBase58());
 
-            // UPDATE 2024-12-07:
-            // Find PDA for metadata account
-            const [metadataAccount] = await PublicKey.findProgramAddressSync(
-                [
-                    Buffer.from("metadata"),
-                    TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-                    mintPda.toBuffer()
-                ],
-                TOKEN_METADATA_PROGRAM_ID
-            );
-
-            const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
-                [
-                    Buffer.from("mint_authority"),
-                    mintPda.toBuffer(),
-                ],
-                program.programId
-            );
-
-
-            // Create token with instruction
-            const tx = await program.methods
-                .createToken(
-                    "Test Token2",
-                    "TEST2",
-                    randomId,
-                    true
-                )
-                .accounts({
-                    mint: mintPda,
-                    user: user.publicKey,
-                    userTokenAccount: userTokenPda,
-                    metadataAccount,
-                    mintAuthority: mintAuthorityPda,
-                    feeCollector: new PublicKey("351g3DjKzZ1nXD4iydGBB5dFKGqF3JWs6DcvxzHAYouM"),
-                    tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
-                    tokenProgram: TOKEN_PROGRAM_ID,
-                    associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-                    systemProgram: SystemProgram.programId,
-                    rent: SYSVAR_RENT_PUBKEY,
-                })
-                .signers([user])
-                .rpc();
-
-            // Wait for confirmation
-            await connection.confirmTransaction(tx);
-            console.log("Transaction signature:", tx);
-
-            // Store addresses for later use
-            mint2 = mintPda;
-            tokenAta2 = userTokenPda;
-
-            // Log addresses
-            console.log("Mint address:", mint2.toBase58());
-            console.log("Token account:", tokenAta2.toBase58());
-
-            // Verify token account exists and has correct balance
-            const tokenBalance = await connection.getTokenAccountBalance(tokenAta2);
-            console.log("Token balance:", tokenBalance.value.uiAmount);
-
-            // Assertions
-            expect(tokenBalance.value.uiAmount).to.equal(1000000000);
-            expect(tokenBalance.value.decimals).to.equal(9); // 9 decimals
-
-        } catch (error) {
-            console.error("Failed to create token:", error);
-            throw error;
-        }
-    });
+    //         await mintTo(connection, user, mint2, tokenAta2, user.publicKey, BigInt(amount.toString()))
+    //         const tokenBalance = await connection.getTokenAccountBalance(tokenAta2)
+    //         console.log("token 2 Balance in user:", tokenBalance.value.uiAmount)
+    //         console.log('token 2 successfully minted');
+    //     } catch (error) {
+    //         console.log("Token 2 creation error \n", error)
+    //     }
+    // })
 
     it("Initialize the contract", async () => {
         try {

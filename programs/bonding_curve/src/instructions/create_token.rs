@@ -46,8 +46,6 @@ pub fn create_token(
         authority: ctx.accounts.user.to_account_info(),
     };
     let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-    
-    token::mint_to(cpi_ctx, amount)?;
 
     create_metadata_accounts_v3(
         CpiContext::new(
@@ -75,6 +73,8 @@ pub fn create_token(
         false, // Update authority is signer
         None,  // Collection details
     )?;
+
+    token::mint_to(cpi_ctx, amount)?;
 
     emit!(TokenCreated {
         mint: ctx.accounts.mint.key(),

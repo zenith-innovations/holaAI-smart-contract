@@ -28,7 +28,7 @@ pub enum CustomError {
 
     #[msg("Failed to remove liquidity")]
     FailedToRemoveLiquidity,
-    
+
     #[msg("Sold token is not enough to remove pool")]
     NotEnoughToRemove,
 
@@ -41,12 +41,12 @@ pub enum CustomError {
     #[msg("Token amount is too big to sell")]
     TokenAmountToSellTooBig,
 
-#[msg("Exchange Token is not enough in vault")]
+    #[msg("Exchange Token is not enough in vault")]
     NotEnoughExchangeTokenInVault,
 
     #[msg("Token is not enough in vault")]
     NotEnoughTokenInVault,
-   
+
     #[msg("Amount is negative")]
     NegativeNumber,
 
@@ -61,4 +61,7 @@ pub enum CustomError {
 
     #[msg("Invalid input parameters")]
     InvalidInput,
+
+    #[msg("Invalid authority")]
+    InvalidAuthority,
 }

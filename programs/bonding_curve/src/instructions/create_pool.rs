@@ -14,7 +14,17 @@ pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
         ctx.accounts.exchange_token_mint.key(),
         ctx.bumps.pool,
     ));
+    emit!(PoolCreated {
+        pool: ctx.accounts.pool.key(),
+        token_mint: ctx.accounts.token_mint.key(),
+    });
     Ok(())
+}
+
+#[event]
+pub struct PoolCreated {
+    pub pool: Pubkey,
+    pub token_mint: Pubkey,
 }
 
 #[derive(Accounts)]

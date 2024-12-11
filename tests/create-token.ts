@@ -17,7 +17,7 @@
 // import { expect } from "chai";
 // import keys from '../keys/users.json';
 
-// const PROGRAM_ID = new anchor.web3.PublicKey("2PvLxLoqSGDCadPKZNrJMnuUiVBxdWhBpZjTu8rmC28L")
+// const PROGRAM_ID = new anchor.web3.PublicKey("7Ygc43fvZUGNujq1uzvww9b2kY71UMAptiv6vvYWK91S")
 
 // describe("Create Token Test", () => {
 //     // Configure the client to use the local cluster
