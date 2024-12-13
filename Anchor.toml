@@ -5,7 +5,7 @@ seeds = true
 skip-lint = false
 
 [programs.devnet]
-bonding_curve = "HkAF9DQCMZGb1fRST9CqZ7H77woY4fUcJTJM4ZEjWgSG"
+bonding_curve = "35gLkfqMXJUgrEntHV8C5UugnSjCeQRoCAgSYSstZEag"
 
 [registry]
 url = "https://api.apr.dev"

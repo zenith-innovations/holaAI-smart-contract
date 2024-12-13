@@ -6,16 +6,17 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount};
 #[account]
 pub struct CurveConfiguration {
     pub fees: f64,
+    pub admin: Pubkey,
 }
 
 impl CurveConfiguration {
     pub const SEED: &'static str = "CurveConfiguration";
 
-    // Discriminator (8) + f64 (8)
-    pub const ACCOUNT_SIZE: usize = 8 + 32 + 8;
+    // Discriminator (8) + f64 (8) + Pubkey (32)
+    pub const ACCOUNT_SIZE: usize = 8 + 8 + 32 + 32;
 
-    pub fn new(fees: f64) -> Self {
-        Self { fees }
+    pub fn new(fees: f64, admin: Pubkey) -> Self {
+        Self { fees, admin }
     }
 }
 
@@ -65,6 +66,8 @@ pub struct AddLiquidity {
 #[event]
 pub struct RemoveLiquidity {
     pub pool: Pubkey,
+    pub reserve_token: u64,
+    pub reserve_exchange: u64,
 }
 
 #[event]
@@ -91,7 +94,12 @@ impl LiquidityPool {
         1; // bump: u8
 
     // Constructor to initialize a LiquidityPool with two tokens and a bump for the PDA
-    pub fn new(creator: Pubkey, token: Pubkey, exchange_token: Pubkey, bump: u8, amm_config: Pubkey) -> Self {
+    pub fn new(
+        creator: Pubkey,
+        token: Pubkey,
+        exchange_token: Pubkey,
+        bump: u8,
+    ) -> Self {
         Self {
             creator,
             token,
@@ -133,9 +141,11 @@ pub trait LiquidityPoolAccount<'info> {
             &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
             &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
         ),
+        curve_config: &Account<'info, CurveConfiguration>,
         authority: &Signer<'info>,
-        bump: u8,
         token_program: &Program<'info, Token>,
     ) -> Result<()>;
 
@@ -168,7 +178,6 @@ pub trait LiquidityPoolAccount<'info> {
         ),
         amount: u64,
         authority: &Signer<'info>,
-        bump: u8,
         token_program: &Program<'info, Token>,
     ) -> Result<()>;
 
@@ -248,19 +257,21 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
             &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>, // admin_token_account
+            &mut Account<'info, TokenAccount>, // admin_exchange_token_account
         ),
+        curve_config: &Account<'info, CurveConfiguration>,
         authority: &Signer<'info>,
-        _bump: u8,
         token_program: &Program<'info, Token>,
     ) -> Result<()> {
-        if authority.key() != self.creator {
+        if authority.key() != curve_config.admin {
             return err!(CustomError::InvalidAuthority);
         }
 
         // Transfer all regular tokens from pool to user
         self.transfer_token_from_pool(
             token_accounts.1, // pool_token_account
-            token_accounts.2, // user_token_account
+            token_accounts.6, // admin_token_account
             token_accounts.1.amount,
             token_program,
         )?;
@@ -268,7 +279,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         // Transfer all exchange tokens from pool to user
         self.transfer_token_from_pool(
             token_accounts.4, // pool_exchange_token_account
-            token_accounts.5, // user_exchange_token_account
+            token_accounts.7, // admin_exchange_token_account
             token_accounts.4.amount,
             token_program,
         )?;
@@ -276,7 +287,11 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         // Update pool state
         self.update_reserves(0, 0)?;
         self.total_supply = 0;
-        emit!(RemoveLiquidity { pool: self.key() });
+        emit!(RemoveLiquidity {
+            pool: self.key(),
+            reserve_token: self.reserve_token,
+            reserve_exchange: self.reserve_exchange,
+        });
         Ok(())
     }
 
@@ -361,7 +376,6 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         ),
         amount: u64,
         authority: &Signer<'info>,
-        bump: u8,
         token_program: &Program<'info, Token>,
     ) -> Result<()> {
         if amount == 0 {

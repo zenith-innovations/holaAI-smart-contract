@@ -1,6 +1,6 @@
 use crate::{
     errors::CustomError,
-    state::{LiquidityPool, LiquidityPoolAccount},
+    state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount},
 };
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -8,11 +8,8 @@ use anchor_spl::{
     token::{Mint, Token, TokenAccount},
 };
 
-pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
+pub fn remove_liquidity(ctx: Context<RemoveLiquidity>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
-    if pool.creator.key() != ctx.accounts.user.key() {
-        return Err(CustomError::NotCreator.into());
-    }
 
     let token_accounts = (
         &mut *ctx.accounts.token_mint,
@@ -21,25 +18,20 @@ pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
         &mut *ctx.accounts.exchange_token_mint,
         &mut *ctx.accounts.pool_exchange_token_account,
         &mut *ctx.accounts.user_exchange_token_account,
+        &mut *ctx.accounts.admin_token_account,
+        &mut *ctx.accounts.admin_exchange_token_account,
     );
 
     pool.remove_liquidity(
         token_accounts,
+        &ctx.accounts.curve_config,
         &ctx.accounts.user,
-        bump,
         &ctx.accounts.token_program,
     )?;
 
-    emit!(LiquidityRemoved {
-        pool: ctx.accounts.pool.key(),
-    });
     Ok(())
 }
 
-#[event]
-pub struct LiquidityRemoved {
-    pub pool: Pubkey,
-}
 
 #[derive(Accounts)]
 pub struct RemoveLiquidity<'info> {
@@ -67,13 +59,6 @@ pub struct RemoveLiquidity<'info> {
     )]
     pub pool_token_account: Box<Account<'info, TokenAccount>>,
 
-        #[account(
-        mut,
-        associated_token::mint = exchange_token_mint,
-        associated_token::authority = pool
-    )]
-    pub pool_exchange_token_account: Box<Account<'info, TokenAccount>>,
-
     #[account(
         mut,
         associated_token::mint = token_mint,
@@ -83,11 +68,35 @@ pub struct RemoveLiquidity<'info> {
 
     #[account(
         mut,
+        associated_token::mint = token_mint,
+        associated_token::authority = curve_config.admin,
+    )]
+    pub admin_token_account: Box<Account<'info, TokenAccount>>,
+
+
+    #[account(
+        mut,
+        associated_token::mint = exchange_token_mint,
+        associated_token::authority = curve_config.admin,
+    )]
+    pub admin_exchange_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
         associated_token::mint = exchange_token_mint,
         associated_token::authority = user,
     )]
     pub user_exchange_token_account: Box<Account<'info, TokenAccount>>,
 
+    #[account(
+        mut,
+        associated_token::mint = exchange_token_mint,
+        associated_token::authority = pool
+    )]
+    pub pool_exchange_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(mut)]
+    pub curve_config: Box<Account<'info, CurveConfiguration>>,
     #[account(mut)]
     pub user: Signer<'info>,
     pub system_program: Program<'info, System>,

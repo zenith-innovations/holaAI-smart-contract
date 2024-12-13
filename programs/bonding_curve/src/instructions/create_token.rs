@@ -15,24 +15,21 @@ pub fn create_token(
     name: String,
     symbol: String,
     off_chain_id: String,
-    is_agent: bool,
 ) -> Result<()> {
     let name_ref = &name;
     let symbol_ref = &symbol;
     let off_chain_id_ref = &off_chain_id;
 
-    if is_agent {
-        system_program::transfer(
-            CpiContext::new(
-                ctx.accounts.system_program.to_account_info(),
-                system_program::Transfer {
-                    from: ctx.accounts.user.to_account_info(),
-                    to: ctx.accounts.fee_collector.to_account_info(),
-                },
-            ),
-            CREATION_FEE,
-        )?;
-    }
+    system_program::transfer(
+        CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            system_program::Transfer {
+                from: ctx.accounts.user.to_account_info(),
+                to: ctx.accounts.fee_collector.to_account_info(),
+            },
+        ),
+        CREATION_FEE,
+    )?;
 
     let decimals: u8 = 9;
 

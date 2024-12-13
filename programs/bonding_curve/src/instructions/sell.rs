@@ -6,7 +6,7 @@ use anchor_spl::{
 
 use crate::state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount};
 
-pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
+pub fn sell(ctx: Context<Sell>, amount: u64) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
 
     let token_accounts = (
@@ -22,7 +22,6 @@ pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
         token_accounts,
         amount,
         &ctx.accounts.user,
-        bump,
         &ctx.accounts.token_program,
     )?;
     Ok(())

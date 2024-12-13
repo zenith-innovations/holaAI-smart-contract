@@ -8,13 +8,16 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("HkAF9DQCMZGb1fRST9CqZ7H77woY4fUcJTJM4ZEjWgSG");
+declare_id!("35gLkfqMXJUgrEntHV8C5UugnSjCeQRoCAgSYSstZEag");
 
 #[program]
 pub mod bonding_curve {
     use super::*;
 
-    pub fn initialize(ctx: Context<InitializeCurveConfiguration>, fee: f64) -> Result<()> {
+    pub fn initialize(
+        ctx: Context<InitializeCurveConfiguration>,
+        fee: f64,
+    ) -> Result<()> {
         instructions::initialize(ctx, fee)
     }
 
@@ -26,16 +29,16 @@ pub mod bonding_curve {
         instructions::add_liquidity(ctx)
     }
 
-    pub fn remove_liquidity(ctx: Context<RemoveLiquidity>, bump: u8) -> Result<()> {
-        instructions::remove_liquidity(ctx, bump)
+    pub fn remove_liquidity(ctx: Context<RemoveLiquidity>) -> Result<()> {
+        instructions::remove_liquidity(ctx)
     }
 
     pub fn buy(ctx: Context<Buy>, amount: u64) -> Result<()> {
         instructions::buy(ctx, amount)
     }
 
-    pub fn sell(ctx: Context<Sell>, amount: u64, bump: u8) -> Result<()> {
-        instructions::sell(ctx, amount, bump)
+    pub fn sell(ctx: Context<Sell>, amount: u64) -> Result<()> {
+        instructions::sell(ctx, amount)
     }
 
     pub fn create_token(
@@ -43,9 +46,8 @@ pub mod bonding_curve {
         name: String,
         symbol: String,
         off_chain_id: String,
-        is_agent: bool,
     ) -> Result<()> {
-        instructions::create_token(ctx, name, symbol, off_chain_id, is_agent)
+        instructions::create_token(ctx, name, symbol, off_chain_id)
     }
 
     pub fn proxy_initialize(
@@ -56,5 +58,4 @@ pub mod bonding_curve {
     ) -> Result<()> {
         instructions::proxy_initialize(ctx, init_amount_0, init_amount_1, open_time)
     }
-
 }
