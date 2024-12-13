@@ -6,7 +6,6 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount};
 #[account]
 pub struct CurveConfiguration {
     pub fees: f64,
-    pub admin: Pubkey,
 }
 
 impl CurveConfiguration {
@@ -15,8 +14,8 @@ impl CurveConfiguration {
     // Discriminator (8) + f64 (8)
     pub const ACCOUNT_SIZE: usize = 8 + 32 + 8;
 
-    pub fn new(fees: f64, admin: Pubkey) -> Self {
-        Self { fees , admin}
+    pub fn new(fees: f64) -> Self {
+        Self { fees }
     }
 }
 
@@ -41,8 +40,6 @@ pub struct LiquidityPool {
     pub reserve_token: u64,    // Reserve amount of regular token
     pub reserve_exchange: u64, // Reserve amount of exchange token (replacing reserve_exchange)
     pub bump: u8,
-    pub is_listed_raydium: bool,
-    pub raydium_pool: Option<Pubkey>,
 }
 
 #[event]
@@ -56,6 +53,18 @@ pub struct TradeEvent {
     pub reserve_exchange_before: u64,
     pub reserve_exchange_after: u64,
     pub is_buy: bool,
+}
+
+#[event]
+pub struct AddLiquidity {
+    pub pool: Pubkey,
+    pub reserve_token: u64,
+    pub reserve_exchange: u64,
+}
+
+#[event]
+pub struct RemoveLiquidity {
+    pub pool: Pubkey,
 }
 
 #[event]
@@ -91,8 +100,6 @@ impl LiquidityPool {
             reserve_token: 0_u64,
             reserve_exchange: 0_u64,
             bump,
-            is_listed_raydium: false,
-            raydium_pool: None,
         }
     }
 }
@@ -223,8 +230,12 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
 
         // Update pool state
         self.total_supply = 1_000_000_000 * u64::pow(10, token_accounts.0.decimals as u32);
-        self.update_reserves(token_accounts.0.supply, token_accounts.3.supply)?;
-
+        self.update_reserves(token_accounts.0.supply, INITIAL_TOKEN_FOR_POOL)?;
+        emit!(AddLiquidity {
+            pool: self.key(),
+            reserve_token: token_accounts.0.supply,
+            reserve_exchange: INITIAL_TOKEN_FOR_POOL,
+        });
         Ok(())
     }
 
@@ -242,7 +253,6 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         _bump: u8,
         token_program: &Program<'info, Token>,
     ) -> Result<()> {
-
         if authority.key() != self.creator {
             return err!(CustomError::InvalidAuthority);
         }
@@ -266,7 +276,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         // Update pool state
         self.update_reserves(0, 0)?;
         self.total_supply = 0;
-
+        emit!(RemoveLiquidity { pool: self.key() });
         Ok(())
     }
 
@@ -395,7 +405,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         )?;
 
         self.reserve_token += amount;
-        self.reserve_exchange -= amount_out; // This becomes exchange token reserve
+        self.reserve_exchange -= amount_out;
         msg!("reserve_token {}", self.reserve_token);
         msg!("reserve_exchange {}", self.reserve_exchange);
         emit!(TradeEvent {

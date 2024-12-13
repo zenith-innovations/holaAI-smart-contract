@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { Connection, PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmTransaction, ComputeBudgetProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js"
-import { getAssociatedTokenAddress } from "@solana/spl-token"
+import { createMint, getAssociatedTokenAddress, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token"
 import { expect } from "chai";
 import { BN } from "bn.js";
 import keys from '../keys/users.json'
@@ -18,7 +18,7 @@ const POOL_SEED_PREFIX = "liquidity_pool"
 
 describe("bonding_curve", () => {
     // Thêm khai báo Program ID
-    const PROGRAM_ID = new anchor.web3.PublicKey("7Ygc43fvZUGNujq1uzvww9b2kY71UMAptiv6vvYWK91S");
+    const PROGRAM_ID = new anchor.web3.PublicKey("A4epyqMTKBJ6tvgnm7VqgNpkvRTeb9LsrpoUHV4Fyguj");
     const transactions = [];
     // Thay đổi cách khởi tạo program
     const program = new Program<BondingCurve>(
@@ -39,8 +39,8 @@ describe("bonding_curve", () => {
     let mint1: PublicKey
     let tokenAta1: PublicKey
 
-    let mint2: PublicKey = new PublicKey('GZjqqG1cuYfADAGW6WmSbctThXi3LTY77nhxKrS79fNv');
-    let tokenAta2: PublicKey = new PublicKey('7VKRZLGwRJgXTfcqSmoxtA44B1DBcAaKoMRnyamtZnhJ');
+    let mint2: PublicKey = new PublicKey("GZjqqG1cuYfADAGW6WmSbctThXi3LTY77nhxKrS79fNv");
+    let tokenAta2: PublicKey = new PublicKey("7VKRZLGwRJgXTfcqSmoxtA44B1DBcAaKoMRnyamtZnhJ");
 
     console.log("Admin's wallet address is : ", user.publicKey.toBase58())
 
@@ -153,23 +153,23 @@ describe("bonding_curve", () => {
         }
     });
 
-    // it("Mint token 2 to user wallet", async () => {
-    //     console.log("Trying to create and mint token 2 to user's wallet")
-    //     try {
-    //         mint2 = await createMint(connection, user, user.publicKey, user.publicKey, tokenDecimal)
-    //         console.log('mint 2 address: ', mint2.toBase58());
+    it("Mint token 2 to user wallet", async () => {
+        console.log("Trying to create and mint token 2 to user's wallet")
+        try {
+            mint2 = await createMint(connection, user, user.publicKey, user.publicKey, tokenDecimal)
+            console.log('mint 2 address: ', mint2.toBase58());
 
-    //         tokenAta2 = (await getOrCreateAssociatedTokenAccount(connection, user, mint2, user.publicKey)).address
-    //         console.log('token 2 account address: ', tokenAta2.toBase58());
+            tokenAta2 = (await getOrCreateAssociatedTokenAccount(connection, user, mint2, user.publicKey)).address
+            console.log('token 2 account address: ', tokenAta2.toBase58());
 
-    //         await mintTo(connection, user, mint2, tokenAta2, user.publicKey, BigInt(amount.toString()))
-    //         const tokenBalance = await connection.getTokenAccountBalance(tokenAta2)
-    //         console.log("token 2 Balance in user:", tokenBalance.value.uiAmount)
-    //         console.log('token 2 successfully minted');
-    //     } catch (error) {
-    //         console.log("Token 2 creation error \n", error)
-    //     }
-    // })
+            await mintTo(connection, user, mint2, tokenAta2, user.publicKey, BigInt(amount.toString()))
+            const tokenBalance = await connection.getTokenAccountBalance(tokenAta2)
+            console.log("token 2 Balance in user:", tokenBalance.value.uiAmount)
+            console.log('token 2 successfully minted');
+        } catch (error) {
+            console.log("Token 2 creation error \n", error)
+        }
+    })
 
     it("Initialize the contract", async () => {
         try {

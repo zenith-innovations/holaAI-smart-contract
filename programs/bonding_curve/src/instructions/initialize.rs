@@ -8,7 +8,7 @@ pub fn initialize(ctx: Context<InitializeCurveConfiguration>, fees: f64) -> Resu
         return err!(CustomError::InvalidFee);
     }
 
-    dex_config.set_inner(CurveConfiguration::new(fees, ctx.accounts.admin.key()));
+    dex_config.set_inner(CurveConfiguration::new(fees));
 
     Ok(())
 }
