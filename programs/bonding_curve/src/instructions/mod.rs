@@ -6,6 +6,7 @@ pub mod buy;
 pub mod sell;
 pub mod create_token;
 pub mod create_amm_config;
+pub mod proxy_initialize;
 
 pub use add_liquidity::*;
 pub use create_pool::*;
@@ -15,3 +16,4 @@ pub use buy::*;
 pub use sell::*;
 pub use create_token::*;
 pub use create_amm_config::*;
+pub use proxy_initialize::*;
