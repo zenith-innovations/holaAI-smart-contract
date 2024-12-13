@@ -8,7 +8,7 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("A4epyqMTKBJ6tvgnm7VqgNpkvRTeb9LsrpoUHV4Fyguj");
+declare_id!("HkAF9DQCMZGb1fRST9CqZ7H77woY4fUcJTJM4ZEjWgSG");
 
 #[program]
 pub mod bonding_curve {
@@ -47,4 +47,14 @@ pub mod bonding_curve {
     ) -> Result<()> {
         instructions::create_token(ctx, name, symbol, off_chain_id, is_agent)
     }
+
+    pub fn proxy_initialize(
+        ctx: Context<ProxyInitialize>,
+        init_amount_0: u64,
+        init_amount_1: u64,
+        open_time: u64,
+    ) -> Result<()> {
+        instructions::proxy_initialize(ctx, init_amount_0, init_amount_1, open_time)
+    }
+
 }

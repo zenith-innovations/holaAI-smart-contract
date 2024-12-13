@@ -20,7 +20,7 @@
 
 // describe("bonding_curve", () => {
 //     // Thêm khai báo Program ID
-//     const PROGRAM_ID = new anchor.web3.PublicKey("A4epyqMTKBJ6tvgnm7VqgNpkvRTeb9LsrpoUHV4Fyguj");
+//     const PROGRAM_ID = new anchor.web3.PublicKey("HkAF9DQCMZGb1fRST9CqZ7H77woY4fUcJTJM4ZEjWgSG");
 //     const transactions = [];
 //     // Thay đổi cách khởi tạo program
 //     const program = new Program<BondingCurve>(

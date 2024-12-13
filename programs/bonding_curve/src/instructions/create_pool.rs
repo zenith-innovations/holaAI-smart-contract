@@ -4,6 +4,7 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{Mint, Token, TokenAccount},
 };
+use raydium_cp_swap::states::AmmConfig;
 
 pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
@@ -13,6 +14,7 @@ pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
         ctx.accounts.token_mint.key(),
         ctx.accounts.exchange_token_mint.key(),
         ctx.bumps.pool,
+        ctx.accounts.amm_config.key(),
     ));
     emit!(PoolCreated {
         pool: ctx.accounts.pool.key(),
@@ -43,6 +45,9 @@ pub struct CreateLiquidityPool<'info> {
 
     #[account(mut)]
     pub exchange_token_mint: Box<Account<'info, Mint>>,
+
+    #[account(mut)]
+    pub amm_config: Box<Account<'info, AmmConfig>>,
 
     #[account(
         init,

@@ -14,6 +14,7 @@ no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
+devnet = ["raydium-cp-swap/devnet"]
 
 [dependencies]
 anchor-lang = { version="0.29.0", features = ["init-if-needed"] }
@@ -21,7 +22,9 @@ anchor-spl = { version = "0.29.0", features = ["metadata"] }
 raydium-cp-swap = { git = "https://github.com/raydium-io/raydium-cp-swap", features = [
     "no-entrypoint",
     "cpi",
+    "devnet"
 ] }
-solana-program = ">=1.16, <1.18"
+#solana-program = ">=1.16, <1.18"
+solana-program = "1.14.17"
 spl-token = "4.0.1"
 toml_datetime = "=0.6.1"

@@ -91,7 +91,7 @@ impl LiquidityPool {
         1; // bump: u8
 
     // Constructor to initialize a LiquidityPool with two tokens and a bump for the PDA
-    pub fn new(creator: Pubkey, token: Pubkey, exchange_token: Pubkey, bump: u8) -> Self {
+    pub fn new(creator: Pubkey, token: Pubkey, exchange_token: Pubkey, bump: u8, amm_config: Pubkey) -> Self {
         Self {
             creator,
             token,
