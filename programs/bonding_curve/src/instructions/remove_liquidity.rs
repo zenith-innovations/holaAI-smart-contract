@@ -1,7 +1,4 @@
-use crate::{
-    errors::CustomError,
-    state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount},
-};
+use crate::state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -12,14 +9,14 @@ pub fn remove_liquidity(ctx: Context<RemoveLiquidity>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
 
     let token_accounts = (
-        &mut *ctx.accounts.token_mint,
-        &mut *ctx.accounts.pool_token_account,
-        &mut *ctx.accounts.user_token_account,
-        &mut *ctx.accounts.exchange_token_mint,
-        &mut *ctx.accounts.pool_exchange_token_account,
-        &mut *ctx.accounts.user_exchange_token_account,
-        &mut *ctx.accounts.admin_token_account,
-        &mut *ctx.accounts.admin_exchange_token_account,
+        &mut *ctx.accounts.token_mint, // 0
+        &mut *ctx.accounts.pool_token_account, // 1
+        &mut *ctx.accounts.user_token_account, // 2
+        &mut *ctx.accounts.exchange_token_mint, // 3
+        &mut *ctx.accounts.pool_exchange_token_account, // 4
+        &mut *ctx.accounts.user_exchange_token_account, // 5
+        &mut *ctx.accounts.admin_token_account, // 6
+        &mut *ctx.accounts.admin_exchange_token_account, // 7
     );
 
     pool.remove_liquidity(
@@ -69,7 +66,7 @@ pub struct RemoveLiquidity<'info> {
     #[account(
         mut,
         associated_token::mint = token_mint,
-        associated_token::authority = curve_config.admin,
+        associated_token::authority = curve_config.get_admin(),
     )]
     pub admin_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -77,7 +74,7 @@ pub struct RemoveLiquidity<'info> {
     #[account(
         mut,
         associated_token::mint = exchange_token_mint,
-        associated_token::authority = curve_config.admin,
+        associated_token::authority = curve_config.get_admin(),
     )]
     pub admin_exchange_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -95,7 +92,10 @@ pub struct RemoveLiquidity<'info> {
     )]
     pub pool_exchange_token_account: Box<Account<'info, TokenAccount>>,
 
-    #[account(mut)]
+    #[account(mut,
+        seeds = [CurveConfiguration::SEED.as_bytes()],
+        bump,
+    )]
     pub curve_config: Box<Account<'info, CurveConfiguration>>,
     #[account(mut)]
     pub user: Signer<'info>,

@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{Mint, Token, TokenAccount},
 };
 
-use crate::state::{LiquidityPool, LiquidityPoolAccount};
+use crate::state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount};
 
 pub fn add_liquidity(ctx: Context<AddLiquidity>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
@@ -20,6 +20,7 @@ pub fn add_liquidity(ctx: Context<AddLiquidity>) -> Result<()> {
 
     pool.add_liquidity(
         token_accounts,
+        &ctx.accounts.dex_configuration_account,
         &ctx.accounts.user,
         &ctx.accounts.token_program,
     )?;
@@ -38,6 +39,13 @@ pub struct AddLiquidity<'info> {
         bump
     )]
     pub pool: Account<'info, LiquidityPool>,
+
+    #[account(
+        mut,
+        seeds = [CurveConfiguration::SEED.as_bytes()],
+        bump,
+    )]
+    pub dex_configuration_account: Box<Account<'info, CurveConfiguration>>,
 
     #[account(mut)]
     pub token_mint: Box<Account<'info, Mint>>,

@@ -16,10 +16,12 @@ pub fn buy(ctx: Context<Buy>, amount: u64) -> Result<()> {
         &mut *ctx.accounts.input_token_mint,
         &mut *ctx.accounts.pool_input_token_account,
         &mut *ctx.accounts.user_input_token_account,
+        &mut *ctx.accounts.fee_token_collector,
     );
 
     pool.buy(
         token_accounts,
+        &ctx.accounts.dex_configuration_account,
         amount,
         &ctx.accounts.user,
         &ctx.accounts.token_program,
@@ -35,6 +37,12 @@ pub struct Buy<'info> {
         bump,
     )]
     pub dex_configuration_account: Box<Account<'info, CurveConfiguration>>,
+
+    #[account(
+        mut,
+        constraint = dex_configuration_account.get_fee_collector() == fee_token_collector.key()
+    )]
+    pub fee_token_collector: Box<Account<'info, TokenAccount>>,
 
     #[account(
         mut,

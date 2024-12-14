@@ -8,7 +8,7 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("35gLkfqMXJUgrEntHV8C5UugnSjCeQRoCAgSYSstZEag");
+declare_id!("43zsC4m9jKa1AZJuVpNLxpWFFNqopRHspv9F4Wko7Wsr");
 
 #[program]
 pub mod bonding_curve {
@@ -16,9 +16,42 @@ pub mod bonding_curve {
 
     pub fn initialize(
         ctx: Context<InitializeCurveConfiguration>,
-        fee: f64,
+        fee_percentage: u64,
+        creation_fees: u64,
+        proportion: f64,
+        fee_collector: Pubkey,
+        fee_sol_collector: Pubkey,
+        initial_token_for_pool: u64,
     ) -> Result<()> {
-        instructions::initialize(ctx, fee)
+        instructions::initialize(
+            ctx,
+            fee_percentage,
+            creation_fees,
+            proportion,
+            fee_collector,
+            fee_sol_collector,
+            initial_token_for_pool,
+        )
+    }
+
+    pub fn update_configuration(
+        ctx: Context<UpdateConfiguration>,
+        fee_percentage: u64,
+        creation_fees: u64,
+        proportion: f64,
+        fee_collector: Pubkey,
+        fee_sol_collector: Pubkey,
+        initial_token_for_pool: u64
+    ) -> Result<()> {
+        instructions::update_configuration(
+            ctx,
+            fee_percentage,
+            creation_fees,
+            proportion,
+            fee_collector,
+            fee_sol_collector,
+            initial_token_for_pool,
+        )
     }
 
     pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
@@ -46,8 +79,9 @@ pub mod bonding_curve {
         name: String,
         symbol: String,
         off_chain_id: String,
+        uri: String,
     ) -> Result<()> {
-        instructions::create_token(ctx, name, symbol, off_chain_id)
+        instructions::create_token(ctx, name, symbol, off_chain_id, uri)
     }
 
     pub fn proxy_initialize(

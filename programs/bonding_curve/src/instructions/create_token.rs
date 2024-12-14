@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anchor_lang::{prelude::*, system_program};
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::metadata::{
@@ -8,35 +6,34 @@ use anchor_spl::metadata::{
 };
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
-use crate::consts::{CREATION_FEE, FEE_COLLECTOR};
+use crate::state::CurveConfiguration;
 
 pub fn create_token(
     ctx: Context<CreateToken>,
     name: String,
     symbol: String,
     off_chain_id: String,
+    uri: String,
 ) -> Result<()> {
     let name_ref = &name;
     let symbol_ref = &symbol;
     let off_chain_id_ref = &off_chain_id;
+    let uri_ref = &uri;
 
     system_program::transfer(
         CpiContext::new(
             ctx.accounts.system_program.to_account_info(),
             system_program::Transfer {
                 from: ctx.accounts.user.to_account_info(),
-                to: ctx.accounts.fee_collector.to_account_info(),
+                to: ctx.accounts.fee_sol_collector.to_account_info(),
             },
         ),
-        CREATION_FEE,
+        ctx.accounts.dex_configuration_account.get_creation_fees(),
     )?;
 
     let decimals: u8 = 9;
-
-    // Set the amount of tokens to mint
     let amount = 1_000_000_000 * u64::pow(10, decimals as u32);
 
-    // Mint the tokens to the user's token account
     let cpi_accounts = MintTo {
         mint: ctx.accounts.mint.to_account_info(),
         to: ctx.accounts.user_token_account.to_account_info(),
@@ -60,7 +57,7 @@ pub fn create_token(
         DataV2 {
             name: name_ref.clone(),
             symbol: symbol_ref.clone(),
-            uri: off_chain_id_ref.clone(),
+            uri: uri_ref.clone(),
             seller_fee_basis_points: 0,
             creators: None,
             collection: None,
@@ -75,9 +72,9 @@ pub fn create_token(
 
     emit!(TokenCreated {
         mint: ctx.accounts.mint.key(),
-        off_chain_id: off_chain_id.clone(),
-        name: name.clone(),
-        symbol: symbol.clone(),
+        off_chain_id: off_chain_id_ref.clone(),
+        name: name_ref.clone(),
+        symbol: symbol_ref.clone(),
         total_supply: amount,
     });
 
@@ -130,16 +127,23 @@ pub struct CreateToken<'info> {
     )]
     pub metadata_account: UncheckedAccount<'info>,
 
+    #[account(
+        mut,
+        seeds = [CurveConfiguration::SEED.as_bytes()],
+        bump,
+    )]
+    pub dex_configuration_account: Account<'info, CurveConfiguration>,
+
+    /// CHECK:
+    #[account(
+        mut,
+        address = dex_configuration_account.get_fee_sol_collector()
+    )]
+    pub fee_sol_collector: AccountInfo<'info>, 
+
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
     pub token_metadata_program: Program<'info, Metadata>,
-
-    /// CHECK: This is the fee collector account
-    #[account(
-        mut,
-        address = Pubkey::from_str(FEE_COLLECTOR).unwrap(),
-    )]
-    pub fee_collector: AccountInfo<'info>,
 }
