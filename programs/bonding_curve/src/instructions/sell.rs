@@ -4,10 +4,14 @@ use anchor_spl::{
     token::{Mint, Token, TokenAccount},
 };
 
-use crate::state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount};
+use crate::{errors::CustomError, state::{CurveConfiguration, LiquidityPool, LiquidityPoolAccount}};
 
-pub fn sell(ctx: Context<Sell>, amount: u64) -> Result<()> {
+pub fn sell(ctx: Context<Sell>, amount: u64, min_output_amount: u64) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
+
+    if ctx.accounts.dex_configuration_account.get_is_lockdown() == true {
+        return err!(CustomError::Lockdown);
+    }
 
     let token_accounts = (
         &mut *ctx.accounts.token_mint,
@@ -23,6 +27,7 @@ pub fn sell(ctx: Context<Sell>, amount: u64) -> Result<()> {
         token_accounts,
         &ctx.accounts.dex_configuration_account,
         amount,
+        min_output_amount,
         &ctx.accounts.user,
         &ctx.accounts.token_program,
     )?;

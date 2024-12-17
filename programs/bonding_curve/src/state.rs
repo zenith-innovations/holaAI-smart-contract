@@ -9,15 +9,18 @@ pub struct CurveConfiguration {
     proportion: f64,
     fee_collector: Pubkey,
     fee_sol_collector: Pubkey,
+    exchange_token_mint: Pubkey,
     admin: Pubkey,
     initial_token_for_pool: u64,
+    is_sol_fee: bool,
+    is_lockdown: bool,
 }
 
 impl CurveConfiguration {
     pub const SEED: &'static str = "CurveConfiguration";
 
     // Discriminator (8) + f64 (8) + Pubkey (32)
-    pub const ACCOUNT_SIZE: usize = 8 + 8 + 8 + 32 + 32 + 8 + 32 + 8 + 8;
+    pub const ACCOUNT_SIZE: usize = 8 + 8 + 8 + 32 + 32 + 8 + 32 + 8 + 8 + 1 + 1;
 
     pub fn new(
         fee_percentage: u64,         // + 8
@@ -25,8 +28,11 @@ impl CurveConfiguration {
         proportion: f64,             // + 8
         fee_collector: Pubkey,       // + 32
         fee_sol_collector: Pubkey,   // + 32
+        exchange_token_mint: Pubkey, // + 32
         admin: Pubkey,               // + 32
         initial_token_for_pool: u64, // + 8
+        is_sol_fee: bool,            // + 1
+        is_lockdown: bool,           // + 1
     ) -> Self {
         Self {
             fee_percentage,
@@ -34,8 +40,11 @@ impl CurveConfiguration {
             proportion,
             fee_collector,
             fee_sol_collector,
+            exchange_token_mint,
             admin,
             initial_token_for_pool,
+            is_sol_fee,
+            is_lockdown,
         }
     }
 
@@ -46,14 +55,20 @@ impl CurveConfiguration {
         proportion: f64,
         fee_collector: Pubkey,
         fee_sol_collector: Pubkey,
+        exchange_token_mint: Pubkey,
         initial_token_for_pool: u64,
+        is_sol_fee: bool,
+        is_lockdown: bool,
     ) -> Result<()> {
         self.fee_percentage = fee_percentage;
         self.creation_fees = creation_fees;
         self.proportion = proportion;
         self.fee_collector = fee_collector;
         self.fee_sol_collector = fee_sol_collector;
+        self.exchange_token_mint = exchange_token_mint;
         self.initial_token_for_pool = initial_token_for_pool;
+        self.is_sol_fee = is_sol_fee;
+        self.is_lockdown = is_lockdown;
         Ok(())
     }
 
@@ -83,6 +98,18 @@ impl CurveConfiguration {
 
     pub fn get_fee_sol_collector(&self) -> Pubkey {
         self.fee_sol_collector
+    }
+
+    pub fn get_exchange_token_mint(&self) -> Pubkey {
+        self.exchange_token_mint
+    }
+
+    pub fn get_is_sol_fee(&self) -> bool {
+        self.is_sol_fee
+    }
+
+    pub fn get_is_lockdown(&self) -> bool {
+        self.is_lockdown
     }
 }
 
@@ -225,6 +252,7 @@ pub trait LiquidityPoolAccount<'info> {
         ),
         curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
     ) -> Result<()>;
@@ -243,6 +271,7 @@ pub trait LiquidityPoolAccount<'info> {
         ),
         curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
     ) -> Result<()>;
@@ -287,6 +316,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         token_program: &Program<'info, Token>,
     ) -> Result<()> {
         let initial_token_for_pool = curve_config.get_initial_token_for_pool();
+
         // Transfer regular token to pool
         self.transfer_token_to_pool(
             token_accounts.2,        // user_token_account
@@ -371,43 +401,70 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             &mut Account<'info, Mint>,         // Project token mint
             &mut Account<'info, TokenAccount>, // Project token pool account
             &mut Account<'info, TokenAccount>, // User's project token account
-            &mut Account<'info, Mint>,         // Project token mint
+            &mut Account<'info, Mint>,         // Exchange token mint
             &mut Account<'info, TokenAccount>, // Exchange token pool account
             &mut Account<'info, TokenAccount>, // User's exchange token account
             &mut Account<'info, TokenAccount>, // Fee token account
         ),
         curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
     ) -> Result<()> {
-        if amount == 0 {}
+        if amount == 0 {
+            return err!(CustomError::InvalidAmount);
+        }
+
         let proportion = curve_config.get_proportion();
         let fee_percentage = curve_config.get_fees();
-        
-        msg!("Trying to buy from the pool");
-
         let fee_amount = amount * fee_percentage / 10000;
+        let amount_after_fee = amount - fee_amount;
 
         let bought_amount =
             (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
-        msg!("bought_amount {}", bought_amount);
-
-        let root_val = (proportion as f64 * (amount - fee_amount) as f64 / 1_000_000_000.0
+        let root_val = (proportion as f64 * amount_after_fee as f64 / 1_000_000_000.0
             + bought_amount * bought_amount)
             .sqrt();
-        let amount_out_f64 = (root_val - bought_amount as f64) * 1_000_000.0 * 1_000_000_000.0;
-        let amount_out = amount_out_f64.round() as u64;
+        let mut amount_out =
+            ((root_val - bought_amount) * 1_000_000.0 * 1_000_000_000.0).round() as u64;
+
+        let max_allowed = (self.total_supply as f64 * 0.8) as u64;
+        let current_bought = self.total_supply - self.reserve_token;
+
+        let mut final_amount = amount;
+        let mut final_fee = fee_amount;
+
+        if current_bought + amount_out > max_allowed {
+            amount_out = max_allowed - current_bought;
+
+            let new_bought_amount = amount_out as f64 / (1_000_000.0 * 1_000_000_000.0);
+            let new_amount = ((new_bought_amount * new_bought_amount
+                - bought_amount * bought_amount)
+                * proportion as f64
+                * 1_000_000_000.0)
+                .round() as u64;
+
+            let refund_amount = amount_after_fee - new_amount;
+            let refund_fee = fee_amount * refund_amount / amount_after_fee;
+
+            final_amount = new_amount + (fee_amount - refund_fee);
+            final_fee = fee_amount - refund_fee;
+        }
 
         if amount_out > self.reserve_token {
             return err!(CustomError::NotEnoughTokenInVault);
         }
 
-        // Transfer exchange tokens from user to fee token collector
+        if amount_out < min_output_amount {
+            return err!(CustomError::MinOutputAmountNotMet);
+        }
+
+        // Transfer fee
         self.transfer_token_to_pool(
             token_accounts.5,
             token_accounts.6,
-            fee_amount,
+            final_fee,
             authority,
             token_program,
         )?;
@@ -416,7 +473,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         self.transfer_token_to_pool(
             token_accounts.5,
             token_accounts.4,
-            amount,
+            final_amount - final_fee,
             authority,
             token_program,
         )?;
@@ -429,21 +486,18 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             token_program,
         )?;
 
-        self.reserve_exchange += amount; // This becomes exchange token reserve
+        self.reserve_exchange += final_amount;
         self.reserve_token -= amount_out;
-
-        msg!("reserve_token {}", self.reserve_token);
-        msg!("reserve_exchange {}", self.reserve_exchange);
 
         emit!(TradeEvent {
             pool: self.key(),
             token_mint: token_accounts.0.key(),
-            amount_in: amount,
+            amount_in: final_amount,
             amount_out,
-            reserve_exchange_before: self.reserve_exchange,
-            reserve_exchange_after: 0,
-            reserve_token_before: self.reserve_token,
-            reserve_token_after: 0,
+            reserve_exchange_before: self.reserve_exchange - final_amount,
+            reserve_exchange_after: self.reserve_exchange,
+            reserve_token_before: self.reserve_token + amount_out,
+            reserve_token_after: self.reserve_token,
             is_buy: true,
         });
         Ok(())
@@ -462,6 +516,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         ),
         curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
     ) -> Result<()> {
@@ -489,6 +544,10 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         if self.reserve_exchange < amount_out {
             // This checks exchange token reserve
             return err!(CustomError::NotEnoughExchangeTokenInVault);
+        }
+
+        if amount_out < min_output_amount {
+            return err!(CustomError::MinOutputAmountNotMet);
         }
 
         // Transfer project tokens from user to pool

@@ -6,6 +6,7 @@ use anchor_spl::metadata::{
 };
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
+use crate::errors::CustomError;
 use crate::state::CurveConfiguration;
 
 pub fn create_token(
@@ -20,16 +21,35 @@ pub fn create_token(
     let off_chain_id_ref = &off_chain_id;
     let uri_ref = &uri;
 
-    system_program::transfer(
-        CpiContext::new(
-            ctx.accounts.system_program.to_account_info(),
-            system_program::Transfer {
-                from: ctx.accounts.user.to_account_info(),
-                to: ctx.accounts.fee_sol_collector.to_account_info(),
-            },
-        ),
-        ctx.accounts.dex_configuration_account.get_creation_fees(),
-    )?;
+    if ctx.accounts.dex_configuration_account.get_is_lockdown() == true {
+        return err!(CustomError::Lockdown);
+    }
+
+    if ctx.accounts.dex_configuration_account.get_is_sol_fee() == true {
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.user.to_account_info(),
+                    to: ctx.accounts.fee_sol_collector.to_account_info(),
+                },
+            ),
+            ctx.accounts.dex_configuration_account.get_creation_fees(),
+        )?;
+    } else {
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                token::Transfer {
+                    from: ctx.accounts.user.to_account_info(),
+                    to: ctx.accounts.fee_collector.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+                &[&[]],
+            ),
+            ctx.accounts.dex_configuration_account.get_creation_fees(),
+        )?;
+    }
 
     let decimals: u8 = 9;
     let amount = 1_000_000_000 * u64::pow(10, decimals as u32);
@@ -139,7 +159,13 @@ pub struct CreateToken<'info> {
         mut,
         address = dex_configuration_account.get_fee_sol_collector()
     )]
-    pub fee_sol_collector: AccountInfo<'info>, 
+    pub fee_sol_collector: AccountInfo<'info>,
+
+    #[account(
+        mut,
+        address = dex_configuration_account.get_fee_collector()
+    )]
+    pub fee_collector: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
