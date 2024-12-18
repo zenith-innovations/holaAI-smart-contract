@@ -8,7 +8,7 @@ pub mod utils;
 
 use crate::instructions::*;
 
-declare_id!("43zsC4m9jKa1AZJuVpNLxpWFFNqopRHspv9F4Wko7Wsr");
+declare_id!("DpoVAk5Lyu3MWpFMh2RZBCPETxgghaBxyMQ5LZfe6vUH");
 
 #[program]
 pub mod bonding_curve {

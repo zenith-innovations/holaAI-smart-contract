@@ -20,7 +20,7 @@ impl CurveConfiguration {
     pub const SEED: &'static str = "CurveConfiguration";
 
     // Discriminator (8) + f64 (8) + Pubkey (32)
-    pub const ACCOUNT_SIZE: usize = 8 + 8 + 8 + 32 + 32 + 8 + 32 + 8 + 8 + 1 + 1;
+    pub const ACCOUNT_SIZE: usize = 8 + 8 + 8 + 32 + 32 + 32 + 32 + 8 + 8 + 1 + 1;
 
     pub fn new(
         fee_percentage: u64,         // + 8
@@ -407,50 +407,45 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             &mut Account<'info, TokenAccount>, // Fee token account
         ),
         curve_config: &Account<'info, CurveConfiguration>,
-        amount: u64,
+        mut amount: u64,
         min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
     ) -> Result<()> {
-        if amount == 0 {
-            return err!(CustomError::InvalidAmount);
+        if amount == 0 {}
+        let proportion = curve_config.get_proportion();
+        let initial_token_for_pool = curve_config.get_initial_token_for_pool();
+        let fee_percentage = curve_config.get_fees();
+        let tokens_sold: f64 =
+            self.total_supply as f64 / 1_000_000_000.0 / 1_000_000.0 * 80.0 / 100.0;
+        let sol_needed: u64 =
+            (((tokens_sold * tokens_sold) / (proportion)) * 1_000_000_000.0).round() as u64;
+
+        msg!("reserve_exchange {}", self.reserve_exchange);
+        msg!("total_supply {}", self.total_supply);
+        msg!("tokens_sold {}", tokens_sold);
+        msg!("sol_needed {}", sol_needed);
+        msg!("amount {}", amount);
+
+        if amount > sol_needed - self.reserve_exchange {
+            amount = sol_needed - self.reserve_exchange + initial_token_for_pool;
         }
 
-        let proportion = curve_config.get_proportion();
-        let fee_percentage = curve_config.get_fees();
+        msg!("amount {}", amount);
+
+        msg!("Trying to buy from the pool");
+
         let fee_amount = amount * fee_percentage / 10000;
-        let amount_after_fee = amount - fee_amount;
 
         let bought_amount =
             (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
-        let root_val = (proportion as f64 * amount_after_fee as f64 / 1_000_000_000.0
+        msg!("bought_amount {}", bought_amount);
+
+        let root_val = (proportion as f64 * (amount - fee_amount) as f64 / 1_000_000_000.0
             + bought_amount * bought_amount)
             .sqrt();
-        let mut amount_out =
-            ((root_val - bought_amount) * 1_000_000.0 * 1_000_000_000.0).round() as u64;
-
-        let max_allowed = (self.total_supply as f64 * 0.8) as u64;
-        let current_bought = self.total_supply - self.reserve_token;
-
-        let mut final_amount = amount;
-        let mut final_fee = fee_amount;
-
-        if current_bought + amount_out > max_allowed {
-            amount_out = max_allowed - current_bought;
-
-            let new_bought_amount = amount_out as f64 / (1_000_000.0 * 1_000_000_000.0);
-            let new_amount = ((new_bought_amount * new_bought_amount
-                - bought_amount * bought_amount)
-                * proportion as f64
-                * 1_000_000_000.0)
-                .round() as u64;
-
-            let refund_amount = amount_after_fee - new_amount;
-            let refund_fee = fee_amount * refund_amount / amount_after_fee;
-
-            final_amount = new_amount + (fee_amount - refund_fee);
-            final_fee = fee_amount - refund_fee;
-        }
+        let amount_out_f64 = (root_val - bought_amount as f64) * 1_000_000.0 * 1_000_000_000.0;
+        let amount_out = amount_out_f64.round() as u64;
 
         if amount_out > self.reserve_token {
             return err!(CustomError::NotEnoughTokenInVault);
@@ -460,11 +455,11 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             return err!(CustomError::MinOutputAmountNotMet);
         }
 
-        // Transfer fee
+        // Transfer exchange tokens from user to fee token collector
         self.transfer_token_to_pool(
             token_accounts.5,
             token_accounts.6,
-            final_fee,
+            fee_amount,
             authority,
             token_program,
         )?;
@@ -473,7 +468,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         self.transfer_token_to_pool(
             token_accounts.5,
             token_accounts.4,
-            final_amount - final_fee,
+            amount,
             authority,
             token_program,
         )?;
@@ -486,15 +481,18 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             token_program,
         )?;
 
-        self.reserve_exchange += final_amount;
+        self.reserve_exchange += amount; // This becomes exchange token reserve
         self.reserve_token -= amount_out;
+
+        msg!("reserve_token {}", self.reserve_token);
+        msg!("reserve_exchange {}", self.reserve_exchange);
 
         emit!(TradeEvent {
             pool: self.key(),
             token_mint: token_accounts.0.key(),
-            amount_in: final_amount,
+            amount_in: amount,
             amount_out,
-            reserve_exchange_before: self.reserve_exchange - final_amount,
+            reserve_exchange_before: self.reserve_exchange - amount,
             reserve_exchange_after: self.reserve_exchange,
             reserve_token_before: self.reserve_token + amount_out,
             reserve_token_after: self.reserve_token,

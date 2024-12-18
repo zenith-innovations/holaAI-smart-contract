@@ -79,4 +79,10 @@ pub enum CustomError {
 
     #[msg("Lockdown")]
     Lockdown,
+
+    #[msg("Insufficient supply")]
+    InsufficientSupply,
+
+    #[msg("Overflow")]
+    Overflow,
 }

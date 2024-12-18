@@ -25,6 +25,13 @@ pub fn create_token(
         return err!(CustomError::Lockdown);
     }
 
+    msg!("Creating token");
+    msg!(
+        "Fee sol collector: {}",
+        ctx.accounts.fee_sol_collector.key()
+    );
+    msg!("Fee collector: {}", ctx.accounts.fee_collector.key());
+
     if ctx.accounts.dex_configuration_account.get_is_sol_fee() == true {
         system_program::transfer(
             CpiContext::new(
@@ -38,14 +45,13 @@ pub fn create_token(
         )?;
     } else {
         token::transfer(
-            CpiContext::new_with_signer(
+            CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
                 token::Transfer {
-                    from: ctx.accounts.user.to_account_info(),
+                    from: ctx.accounts.user_fee_token_account.to_account_info(),
                     to: ctx.accounts.fee_collector.to_account_info(),
                     authority: ctx.accounts.user.to_account_info(),
-                },
-                &[&[]],
+                }
             ),
             ctx.accounts.dex_configuration_account.get_creation_fees(),
         )?;
@@ -135,6 +141,13 @@ pub struct CreateToken<'info> {
     )]
     pub user_token_account: Account<'info, TokenAccount>,
 
+    // Thêm token account của user cho token fee
+    #[account(
+    mut,
+    constraint = user_fee_token_account.owner == user.key()
+    )]
+    pub user_fee_token_account: Account<'info, TokenAccount>,
+
     /// CHECK: This account will be the mint authority
     pub mint_authority: UncheckedAccount<'info>,
 
@@ -157,15 +170,16 @@ pub struct CreateToken<'info> {
     /// CHECK:
     #[account(
         mut,
-        address = dex_configuration_account.get_fee_sol_collector()
+        constraint = dex_configuration_account.get_fee_sol_collector() == fee_sol_collector.key()
     )]
     pub fee_sol_collector: AccountInfo<'info>,
 
+    /// CHECK:
     #[account(
         mut,
-        address = dex_configuration_account.get_fee_collector()
+        constraint = dex_configuration_account.get_fee_collector() == fee_collector.key()
     )]
-    pub fee_collector: AccountInfo<'info>,
+    pub fee_collector: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,

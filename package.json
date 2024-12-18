@@ -6,7 +6,7 @@
     "test": "ts-mocha --require ts-node/register \"tests/**/*.ts\" --timeout 100000",
     "run-interval": "ts-node scripts/run-test-interval.ts",
     "test:local": "anchor test --skip-local-validator",
-    "test:init": "anchor test --skip-build --skip-deploy"
+    "test:init": "anchor test --skip-build --skip-deploy --skip-local-validator"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.29.0",

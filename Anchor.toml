@@ -4,14 +4,14 @@
 seeds = true
 skip-lint = false
 
-[programs.devnet]
-bonding_curve = "43zsC4m9jKa1AZJuVpNLxpWFFNqopRHspv9F4Wko7Wsr"
+[programs.localnet]
+bonding_curve = "DpoVAk5Lyu3MWpFMh2RZBCPETxgghaBxyMQ5LZfe6vUH"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "./keys/users.json"
 
 [scripts]

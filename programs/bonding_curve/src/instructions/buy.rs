@@ -59,12 +59,22 @@ pub struct Buy<'info> {
     #[account(mut)]
     pub output_token_mint: Box<Account<'info, Mint>>,
 
+    #[account(mut)]
+    pub input_token_mint: Box<Account<'info, Mint>>,
+
     #[account(
         mut,
         associated_token::mint = output_token_mint,
         associated_token::authority = pool
     )]
     pub pool_output_token_account: Box<Account<'info, TokenAccount>>,
+
+    #[account(
+        mut,
+        associated_token::mint = input_token_mint,
+        associated_token::authority = pool
+    )]
+    pub pool_input_token_account: Box<Account<'info, TokenAccount>>,
 
     /// CHECK:
     #[account(
@@ -78,19 +88,9 @@ pub struct Buy<'info> {
     #[account(
         mut,
         associated_token::mint = input_token_mint,
-        associated_token::authority = pool
-    )]
-    pub pool_input_token_account: Box<Account<'info, TokenAccount>>,
-
-    #[account(
-        mut,
-        associated_token::mint = input_token_mint,
         associated_token::authority = user
     )]
     pub user_input_token_account: Box<Account<'info, TokenAccount>>,
-
-    #[account(mut)]
-    pub input_token_mint: Box<Account<'info, Mint>>,
 
     #[account(mut)]
     pub user: Signer<'info>,
