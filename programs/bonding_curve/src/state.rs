@@ -1,27 +1,115 @@
-use crate::consts::INITIAL_LAMPORTS_FOR_POOL;
-use crate::consts::PROPORTION;
 use crate::errors::CustomError;
 use anchor_lang::prelude::*;
-use anchor_lang::system_program;
 use anchor_spl::token::{self, Mint, Token, TokenAccount};
 
 #[account]
 pub struct CurveConfiguration {
-    pub fees: f64,
-    pub fee_collector: Pubkey,
+    fee_percentage: u64,
+    creation_fees: u64,
+    proportion: f64,
+    fee_collector: Pubkey,
+    fee_sol_collector: Pubkey,
+    exchange_token_mint: Pubkey,
+    admin: Pubkey,
+    initial_token_for_pool: u64,
+    is_sol_fee: bool,
+    is_lockdown: bool,
 }
 
 impl CurveConfiguration {
     pub const SEED: &'static str = "CurveConfiguration";
 
-    // Discriminator (8) + f64 (8)
-    pub const ACCOUNT_SIZE: usize = 8 + 32 + 8;
+    // Discriminator (8) + f64 (8) + Pubkey (32)
+    pub const ACCOUNT_SIZE: usize = 8 + 8 + 8 + 32 + 32 + 8 + 32 + 8 + 8 + 1 + 1;
 
-    pub fn new(fees: f64, fee_collector: Pubkey) -> Self {
+    pub fn new(
+        fee_percentage: u64,         // + 8
+        creation_fees: u64,          // + 8
+        proportion: f64,             // + 8
+        fee_collector: Pubkey,       // + 32
+        fee_sol_collector: Pubkey,   // + 32
+        exchange_token_mint: Pubkey, // + 32
+        admin: Pubkey,               // + 32
+        initial_token_for_pool: u64, // + 8
+        is_sol_fee: bool,            // + 1
+        is_lockdown: bool,           // + 1
+    ) -> Self {
         Self {
-            fees,
+            fee_percentage,
+            creation_fees,
+            proportion,
             fee_collector,
+            fee_sol_collector,
+            exchange_token_mint,
+            admin,
+            initial_token_for_pool,
+            is_sol_fee,
+            is_lockdown,
         }
+    }
+
+    pub fn update_configuration(
+        &mut self,
+        fee_percentage: u64,
+        creation_fees: u64,
+        proportion: f64,
+        fee_collector: Pubkey,
+        fee_sol_collector: Pubkey,
+        exchange_token_mint: Pubkey,
+        initial_token_for_pool: u64,
+        is_sol_fee: bool,
+        is_lockdown: bool,
+    ) -> Result<()> {
+        self.fee_percentage = fee_percentage;
+        self.creation_fees = creation_fees;
+        self.proportion = proportion;
+        self.fee_collector = fee_collector;
+        self.fee_sol_collector = fee_sol_collector;
+        self.exchange_token_mint = exchange_token_mint;
+        self.initial_token_for_pool = initial_token_for_pool;
+        self.is_sol_fee = is_sol_fee;
+        self.is_lockdown = is_lockdown;
+        Ok(())
+    }
+
+    pub fn get_admin(&self) -> Pubkey {
+        self.admin
+    }
+
+    pub fn get_initial_token_for_pool(&self) -> u64 {
+        self.initial_token_for_pool
+    }
+
+    pub fn get_proportion(&self) -> f64 {
+        self.proportion
+    }
+
+    pub fn get_fees(&self) -> u64 {
+        self.fee_percentage
+    }
+
+    pub fn get_creation_fees(&self) -> u64 {
+        self.creation_fees
+    }
+
+    pub fn get_fee_collector(&self) -> Pubkey {
+        self.fee_collector
+    }
+
+    pub fn get_fee_sol_collector(&self) -> Pubkey {
+        self.fee_sol_collector
+    }
+
+    pub fn get_exchange_token_mint(&self) -> Pubkey {
+        self.exchange_token_mint
+    }
+
+    pub fn get_is_sol_fee(&self) -> bool {
+        self.is_sol_fee
+    }
+
+    pub fn get_is_lockdown(&self) -> bool {
+        self.is_lockdown
     }
 }
 
@@ -39,33 +127,13 @@ impl LiquidityProvider {
 
 #[account]
 pub struct LiquidityPool {
-    pub creator: Pubkey,    // Public key of the pool creator
-    pub token: Pubkey,      // Public key of the token in the liquidity pool
-    pub total_supply: u64,  // Total supply of liquidity tokens
-    pub reserve_token: u64, // Reserve amount of token in the pool
-    pub reserve_sol: u64,   // Reserve amount of sol_token in the pool
-    pub bump: u8,           // Nonce for the program-derived address
-}
-
-impl LiquidityPool {
-    pub const POOL_SEED_PREFIX: &'static str = "liquidity_pool";
-    pub const SOL_VAULT_PREFIX: &'static str = "liquidity_sol_vault";
-
-    // Discriminator (8) + Pubkey (32) + Pubkey (32) + totalsupply (8)
-    // + reserve one (8) + reserve two (8) + Bump (1)
-    pub const ACCOUNT_SIZE: usize = 8 + 32 + 32 + 8 + 8 + 8 + 1;
-
-    // Constructor to initialize a LiquidityPool with two tokens and a bump for the PDA
-    pub fn new(creator: Pubkey, token: Pubkey, bump: u8) -> Self {
-        Self {
-            creator,
-            token,
-            total_supply: 0_u64,
-            reserve_token: 0_u64,
-            reserve_sol: 0_u64,
-            bump,
-        }
-    }
+    pub creator: Pubkey,
+    pub token: Pubkey,          // Regular token mint
+    pub exchange_token: Pubkey, // Exchange token mint (replacing SOL)
+    pub total_supply: u64,
+    pub reserve_token: u64,    // Reserve amount of regular token
+    pub reserve_exchange: u64, // Reserve amount of exchange token (replacing reserve_exchange)
+    pub bump: u8,
 }
 
 #[event]
@@ -76,27 +144,80 @@ pub struct TradeEvent {
     pub amount_out: u64,
     pub reserve_token_before: u64,
     pub reserve_token_after: u64,
-    pub reserve_sol_before: u64,
-    pub reserve_sol_after: u64,
+    pub reserve_exchange_before: u64,
+    pub reserve_exchange_after: u64,
     pub is_buy: bool,
+}
+
+#[event]
+pub struct AddLiquidity {
+    pub pool: Pubkey,
+    pub reserve_token: u64,
+    pub reserve_exchange: u64,
+}
+
+#[event]
+pub struct RemoveLiquidity {
+    pub pool: Pubkey,
+    pub reserve_token: u64,
+    pub reserve_exchange: u64,
+}
+
+#[event]
+pub struct RaydiumPoolCreated {
+    pub bonding_pool: Pubkey,
+    pub raydium_pool: Pubkey,
+    pub token_mint: Pubkey,
+    pub exchange_token_mint: Pubkey,
+    pub creator: Pubkey,
+}
+
+impl LiquidityPool {
+    pub const POOL_SEED_PREFIX: &'static str = "liquidity_pool";
+
+    // Discriminator (8) + Pubkey (32) + Pubkey (32) + totalsupply (8)
+    // + reserve one (8) + reserve two (8) + Bump (1)
+    pub const ACCOUNT_SIZE: usize = 8 + // discriminator
+        32 + // creator: Pubkey
+        32 + // token: Pubkey
+        32 + // exchange_token: Pubkey  
+        8 +  // total_supply: u64
+        8 +  // reserve_token: u64
+        8 +  // reserve_exchange: u64
+        1; // bump: u8
+
+    // Constructor to initialize a LiquidityPool with two tokens and a bump for the PDA
+    pub fn new(creator: Pubkey, token: Pubkey, exchange_token: Pubkey, bump: u8) -> Self {
+        Self {
+            creator,
+            token,
+            exchange_token,
+            total_supply: 0_u64,
+            reserve_token: 0_u64,
+            reserve_exchange: 0_u64,
+            bump,
+        }
+    }
 }
 
 pub trait LiquidityPoolAccount<'info> {
     // Updates the token reserves in the liquidity pool
-    fn update_reserves(&mut self, reserve_token: u64, reserve_sol: u64) -> Result<()>;
+    fn update_reserves(&mut self, reserve_token: u64, reserve_exchange: u64) -> Result<()>;
 
     // Allows adding liquidity by depositing an amount of two tokens and getting back pool shares
     fn add_liquidity(
         &mut self,
         token_accounts: (
-            &mut Account<'info, Mint>,
-            &mut Account<'info, TokenAccount>,
-            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,         // token_mint
+            &mut Account<'info, TokenAccount>, // pool_token_account
+            &mut Account<'info, TokenAccount>, // user_token_account
+            &mut Account<'info, Mint>,         // exchange_token_mint
+            &mut Account<'info, TokenAccount>, // pool_exchange_token_account
+            &mut Account<'info, TokenAccount>, // user_exchange_token_account
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()>;
 
     // Allows removing liquidity by burning pool shares and receiving back a proportionate amount of tokens
@@ -106,46 +227,53 @@ pub trait LiquidityPoolAccount<'info> {
             &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
             &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
         ),
-        pool_sol_account: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         authority: &Signer<'info>,
-        bump: u8,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()>;
 
     fn buy(
         &mut self,
-        bonding_configuration_account: &Account<'info, CurveConfiguration>,
-        fee_collector: &AccountInfo<'info>,
+        // bonding_configuration_account: &Account<'info, CurveConfiguration>,
         token_accounts: (
             &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
             &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
-        bump: u8,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()>;
 
     fn sell(
         &mut self,
-        bonding_configuration_account: &Account<'info, CurveConfiguration>,
-        fee_collector: &AccountInfo<'info>,
+        // bonding_configuration_account: &Account<'info, CurveConfiguration>,
         token_accounts: (
             &mut Account<'info, Mint>,
             &mut Account<'info, TokenAccount>,
             &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, TokenAccount>,
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
-        bump: u8,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()>;
 
     fn transfer_token_from_pool(
@@ -164,134 +292,193 @@ pub trait LiquidityPoolAccount<'info> {
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
     ) -> Result<()>;
-
-    fn transfer_sol_to_pool(
-        &self,
-        from: &Signer<'info>,
-        to: &mut AccountInfo<'info>,
-        amount: u64,
-        system_program: &Program<'info, System>,
-    ) -> Result<()>;
-
-    fn transfer_sol_from_pool(
-        &self,
-        from: &mut AccountInfo<'info>,
-        to: &Signer<'info>,
-        amount: u64,
-        bump: u8,
-        system_program: &Program<'info, System>,
-    ) -> Result<()>;
-
-    fn transfer_sol_to_fee_collector(
-        &self,
-        from: &AccountInfo<'info>,
-        fee_collector: &AccountInfo<'info>,
-        amount: u64,
-        bump: u8,
-        system_program: &Program<'info, System>,
-    ) -> Result<()>;
-
-    fn calculate_buy_amount(&self, amount_in: u64) -> Result<u64>;
-
-    fn calculate_sell_amount(&self, token_amount: u64) -> Result<u64>;
-
-    fn calculate_market_cap(&self) -> Result<u64>;
 }
 
 impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
-    fn update_reserves(&mut self, reserve_token: u64, reserve_sol: u64) -> Result<()> {
+    fn update_reserves(&mut self, reserve_token: u64, reserve_exchange: u64) -> Result<()> {
         self.reserve_token = reserve_token;
-        self.reserve_sol = reserve_sol;
+        self.reserve_exchange = reserve_exchange;
         Ok(())
     }
 
     fn add_liquidity(
         &mut self,
         token_accounts: (
-            &mut Account<'info, Mint>,
-            &mut Account<'info, TokenAccount>,
-            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,         // token_mint
+            &mut Account<'info, TokenAccount>, // pool_token_account
+            &mut Account<'info, TokenAccount>, // user_token_account
+            &mut Account<'info, Mint>,         // exchange_token_mint
+            &mut Account<'info, TokenAccount>, // pool_exchange_token_account
+            &mut Account<'info, TokenAccount>, // user_exchange_token_account
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()> {
+        let initial_token_for_pool = curve_config.get_initial_token_for_pool();
+
+        // Transfer regular token to pool
         self.transfer_token_to_pool(
-            token_accounts.2,
-            token_accounts.1,
-            token_accounts.0.supply,
+            token_accounts.2,        // user_token_account
+            token_accounts.1,        // pool_token_account
+            token_accounts.0.supply, // amount of regular token
             authority,
             token_program,
         )?;
 
-        self.transfer_sol_to_pool(
+        // Transfer exchange token to pool
+        self.transfer_token_to_pool(
+            token_accounts.5,       // user_exchange_token_account
+            token_accounts.4,       // pool_exchange_token_account
+            initial_token_for_pool, // amount of exchange token
             authority,
-            pool_sol_vault,
-            INITIAL_LAMPORTS_FOR_POOL,
-            system_program,
+            token_program,
         )?;
-        self.total_supply = 1_000_000_000_000_000_000;
-        self.update_reserves(token_accounts.0.supply, INITIAL_LAMPORTS_FOR_POOL)?;
 
+        // Update pool state
+        self.total_supply = 1_000_000_000 * u64::pow(10, token_accounts.0.decimals as u32);
+        self.update_reserves(token_accounts.0.supply, initial_token_for_pool)?;
+        emit!(AddLiquidity {
+            pool: self.key(),
+            reserve_token: token_accounts.0.supply,
+            reserve_exchange: initial_token_for_pool,
+        });
         Ok(())
     }
 
     fn remove_liquidity(
         &mut self,
         token_accounts: (
-            &mut Account<'info, Mint>,
-            &mut Account<'info, TokenAccount>,
-            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,         // 0
+            &mut Account<'info, TokenAccount>, // 1
+            &mut Account<'info, TokenAccount>, // 2
+            &mut Account<'info, Mint>,         // 3
+            &mut Account<'info, TokenAccount>, // 4
+            &mut Account<'info, TokenAccount>, // 5
+            &mut Account<'info, TokenAccount>, // 6
+            &mut Account<'info, TokenAccount>, // 7
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         authority: &Signer<'info>,
-        bump: u8,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()> {
+        if authority.key() != curve_config.admin {
+            return err!(CustomError::InvalidAuthority);
+        }
+
+        // Transfer all regular tokens from pool to user
         self.transfer_token_from_pool(
-            token_accounts.1,
-            token_accounts.2,
-            token_accounts.1.amount as u64,
+            token_accounts.1, // pool_token_account
+            token_accounts.6, // admin_token_account
+            token_accounts.1.amount,
             token_program,
         )?;
-        // let amount = self.to_account_info().lamports() - self.get_lamports();
-        let amount = pool_sol_vault.to_account_info().lamports() as u64;
-        self.transfer_sol_from_pool(pool_sol_vault, authority, amount, bump, system_program)?;
+
+        // Transfer all exchange tokens from pool to user
+        self.transfer_token_from_pool(
+            token_accounts.4, // pool_exchange_token_account
+            token_accounts.7, // admin_exchange_token_account
+            token_accounts.4.amount,
+            token_program,
+        )?;
+
+        emit!(RemoveLiquidity {
+            pool: self.key(),
+            reserve_token: self.reserve_token,
+            reserve_exchange: self.reserve_exchange,
+        });
+
+        // Update pool state
+        self.update_reserves(0, 0)?;
+        self.total_supply = 0;
 
         Ok(())
     }
 
     fn buy(
         &mut self,
-        bonding_configuration_account: &Account<'info, CurveConfiguration>,
-        fee_collector: &AccountInfo<'info>,
         token_accounts: (
-            &mut Account<'info, Mint>,
-            &mut Account<'info, TokenAccount>,
-            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,         // Project token mint
+            &mut Account<'info, TokenAccount>, // Project token pool account
+            &mut Account<'info, TokenAccount>, // User's project token account
+            &mut Account<'info, Mint>,         // Exchange token mint
+            &mut Account<'info, TokenAccount>, // Exchange token pool account
+            &mut Account<'info, TokenAccount>, // User's exchange token account
+            &mut Account<'info, TokenAccount>, // Fee token account
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
-        bump: u8,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()> {
-        let fee = bonding_configuration_account.fees;
-        let fee_amount = (amount as f64 * fee / 100.0).round() as u64;
+        if amount == 0 {
+            return err!(CustomError::InvalidAmount);
+        }
 
-        self.transfer_sol_to_fee_collector(pool_sol_vault, fee_collector, fee_amount, bump, system_program)?;
-
+        let proportion = curve_config.get_proportion();
+        let fee_percentage = curve_config.get_fees();
+        let fee_amount = amount * fee_percentage / 10000;
         let amount_after_fee = amount - fee_amount;
 
-        let amount_out = self.calculate_buy_amount(amount_after_fee)?;
+        let bought_amount =
+            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
+        let root_val = (proportion as f64 * amount_after_fee as f64 / 1_000_000_000.0
+            + bought_amount * bought_amount)
+            .sqrt();
+        let mut amount_out =
+            ((root_val - bought_amount) * 1_000_000.0 * 1_000_000_000.0).round() as u64;
 
-        self.reserve_sol += amount;
-        self.reserve_token -= amount_out;
+        let max_allowed = (self.total_supply as f64 * 0.8) as u64;
+        let current_bought = self.total_supply - self.reserve_token;
 
-        self.transfer_sol_to_pool(authority, pool_sol_vault, amount_after_fee, system_program)?;
+        let mut final_amount = amount;
+        let mut final_fee = fee_amount;
+
+        if current_bought + amount_out > max_allowed {
+            amount_out = max_allowed - current_bought;
+
+            let new_bought_amount = amount_out as f64 / (1_000_000.0 * 1_000_000_000.0);
+            let new_amount = ((new_bought_amount * new_bought_amount
+                - bought_amount * bought_amount)
+                * proportion as f64
+                * 1_000_000_000.0)
+                .round() as u64;
+
+            let refund_amount = amount_after_fee - new_amount;
+            let refund_fee = fee_amount * refund_amount / amount_after_fee;
+
+            final_amount = new_amount + (fee_amount - refund_fee);
+            final_fee = fee_amount - refund_fee;
+        }
+
+        if amount_out > self.reserve_token {
+            return err!(CustomError::NotEnoughTokenInVault);
+        }
+
+        if amount_out < min_output_amount {
+            return err!(CustomError::MinOutputAmountNotMet);
+        }
+
+        // Transfer fee
+        self.transfer_token_to_pool(
+            token_accounts.5,
+            token_accounts.6,
+            final_fee,
+            authority,
+            token_program,
+        )?;
+
+        // Transfer exchange tokens from user to pool
+        self.transfer_token_to_pool(
+            token_accounts.5,
+            token_accounts.4,
+            final_amount - final_fee,
+            authority,
+            token_program,
+        )?;
+
+        // Transfer project tokens from pool to user
         self.transfer_token_from_pool(
             token_accounts.1,
             token_accounts.2,
@@ -299,48 +486,71 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             token_program,
         )?;
 
+        self.reserve_exchange += final_amount;
+        self.reserve_token -= amount_out;
+
         emit!(TradeEvent {
             pool: self.key(),
             token_mint: token_accounts.0.key(),
-            amount_in: amount,
+            amount_in: final_amount,
             amount_out,
-            reserve_sol_before: self.reserve_sol - amount,
-            reserve_sol_after: self.reserve_sol,
+            reserve_exchange_before: self.reserve_exchange - final_amount,
+            reserve_exchange_after: self.reserve_exchange,
             reserve_token_before: self.reserve_token + amount_out,
             reserve_token_after: self.reserve_token,
             is_buy: true,
         });
-
         Ok(())
     }
 
     fn sell(
         &mut self,
-        bonding_configuration_account: &Account<'info, CurveConfiguration>,
-        fee_collector: &AccountInfo<'info>,
         token_accounts: (
-            &mut Account<'info, Mint>,
-            &mut Account<'info, TokenAccount>,
-            &mut Account<'info, TokenAccount>,
+            &mut Account<'info, Mint>,         // Project token mint
+            &mut Account<'info, TokenAccount>, // Project token pool account
+            &mut Account<'info, TokenAccount>, // User's project token account
+            &mut Account<'info, Mint>,         // Project token mint
+            &mut Account<'info, TokenAccount>, // Exchange token pool account
+            &mut Account<'info, TokenAccount>, // User's exchange token account
+            &mut Account<'info, TokenAccount>, // Fee token account
         ),
-        pool_sol_vault: &mut AccountInfo<'info>,
+        curve_config: &Account<'info, CurveConfiguration>,
         amount: u64,
-        bump: u8,
+        min_output_amount: u64,
         authority: &Signer<'info>,
         token_program: &Program<'info, Token>,
-        system_program: &Program<'info, System>,
     ) -> Result<()> {
-        let amount_out = self.calculate_sell_amount(amount)?;
-        let fee = bonding_configuration_account.fees;
-        let fee_amount = (amount_out as f64 * fee / 100.0).round() as u64;
+        if amount == 0 {
+            return err!(CustomError::InvalidAmount);
+        }
+        let proportion = curve_config.get_proportion();
 
-        self.transfer_sol_to_fee_collector(pool_sol_vault, fee_collector, fee_amount, bump, system_program)?;
+        if self.reserve_token < amount {
+            return err!(CustomError::TokenAmountToSellTooBig);
+        }
 
-        let amount_after_fee = amount_out - fee_amount;
+        let fee_percentage = curve_config.get_fees();
 
-        self.reserve_token += amount;
-        self.reserve_sol -= amount_after_fee;
+        let bought_amount =
+            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
+        let result_amount = (self.total_supply as f64 - self.reserve_token as f64 - amount as f64)
+            / 1_000_000.0
+            / 1_000_000_000.0;
+        let amount_out_f64 = (bought_amount * bought_amount - result_amount * result_amount)
+            / proportion as f64
+            * 1_000_000_000.0;
+        let amount_out = amount_out_f64.round() as u64;
+        let fee_amount = amount_out * fee_percentage / 10000;
+        if self.reserve_exchange < amount_out {
+            // This checks exchange token reserve
+            return err!(CustomError::NotEnoughExchangeTokenInVault);
+        }
 
+        if amount_out < min_output_amount {
+            return err!(CustomError::MinOutputAmountNotMet);
+        }
+
+        // Transfer project tokens from user to pool
         self.transfer_token_to_pool(
             token_accounts.2,
             token_accounts.1,
@@ -348,23 +558,35 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             authority,
             token_program,
         )?;
-        self.transfer_sol_from_pool(
-            pool_sol_vault,
-            authority,
-            amount_after_fee,
-            bump,
-            system_program,
+
+        // Transfer exchange tokens from pool to user
+        self.transfer_token_from_pool(
+            token_accounts.4,
+            token_accounts.5,
+            amount_out - fee_amount,
+            token_program,
         )?;
 
+        self.transfer_token_from_pool(
+            token_accounts.4,
+            token_accounts.6,
+            fee_amount,
+            token_program,
+        )?;
+
+        self.reserve_token += amount;
+        self.reserve_exchange -= amount_out - fee_amount;
+        msg!("reserve_token {}", self.reserve_token);
+        msg!("reserve_exchange {}", self.reserve_exchange);
         emit!(TradeEvent {
             pool: self.key(),
             token_mint: token_accounts.0.key(),
             amount_in: amount,
-            amount_out: amount_after_fee,
-            reserve_sol_before: self.reserve_sol + amount_out,
-            reserve_sol_after: self.reserve_sol,
-            reserve_token_before: self.reserve_token - amount,
-            reserve_token_after: self.reserve_token,
+            amount_out,
+            reserve_exchange_before: self.reserve_exchange,
+            reserve_exchange_after: 0,
+            reserve_token_before: self.reserve_token,
+            reserve_token_after: 0,
             is_buy: false,
         });
 
@@ -389,6 +611,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
                 &[&[
                     LiquidityPool::POOL_SEED_PREFIX.as_bytes(),
                     self.token.key().as_ref(),
+                    self.exchange_token.key().as_ref(),
                     &[self.bump],
                 ]],
             ),
@@ -417,147 +640,5 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             amount,
         )?;
         Ok(())
-    }
-
-    fn transfer_sol_from_pool(
-        &self,
-        from: &mut AccountInfo<'info>,
-        to: &Signer<'info>,
-        amount: u64,
-        bump: u8,
-        system_program: &Program<'info, System>,
-    ) -> Result<()> {
-        // let pool_account_info = self.to_account_info();
-
-        system_program::transfer(
-            CpiContext::new_with_signer(
-                system_program.to_account_info(),
-                system_program::Transfer {
-                    from: from.clone(),
-                    to: to.to_account_info().clone(),
-                },
-                &[&[
-                    LiquidityPool::SOL_VAULT_PREFIX.as_bytes(),
-                    self.token.key().as_ref(),
-                    // LiquidityPool::POOL_SEED_PREFIX.as_bytes(),
-                    // self.token.key().as_ref(),
-                    &[bump],
-                ]],
-            ),
-            amount,
-        )?;
-        Ok(())
-    }
-
-    fn transfer_sol_to_pool(
-        &self,
-        from: &Signer<'info>,
-        to: &mut AccountInfo<'info>,
-        amount: u64,
-        system_program: &Program<'info, System>,
-    ) -> Result<()> {
-        // let pool_account_info = self.to_account_info();
-
-        system_program::transfer(
-            CpiContext::new(
-                system_program.to_account_info(),
-                system_program::Transfer {
-                    from: from.to_account_info(),
-                    to: to.to_account_info(),
-                },
-            ),
-            amount,
-        )?;
-        Ok(())
-    }
-
-    fn transfer_sol_to_fee_collector(
-        &self,
-        from: &AccountInfo<'info>,
-        fee_collector: &AccountInfo<'info>,
-        amount: u64,
-        bump: u8,
-        system_program: &Program<'info, System>,
-    ) -> Result<()> {
-        system_program::transfer(
-            CpiContext::new_with_signer(
-                system_program.to_account_info(),
-                system_program::Transfer {
-                    from: from.clone(),
-                    to: fee_collector.clone(),
-                },
-                &[&[
-                    LiquidityPool::SOL_VAULT_PREFIX.as_bytes(),
-                    self.token.key().as_ref(),
-                    &[bump],
-                ]],
-            ),
-            amount,
-        )?;
-    Ok(())
-}
-
-    fn calculate_buy_amount(&self, amount_in: u64) -> Result<u64> {
-        if amount_in == 0 {
-            return err!(CustomError::InvalidAmount);
-        }
-
-        let bought_amount =
-            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
-
-        let root_val = (PROPORTION as f64 * amount_in as f64 / 1_000_000_000.0
-            + bought_amount * bought_amount)
-            .sqrt();
-
-        let amount_out =
-            ((root_val - bought_amount) * 1_000_000.0 * 1_000_000_000.0).round() as u64;
-
-        if amount_out > self.reserve_token {
-            return err!(CustomError::NotEnoughTokenInVault);
-        }
-
-        Ok(amount_out)
-    }
-
-    fn calculate_sell_amount(&self, token_amount: u64) -> Result<u64> {
-        if token_amount == 0 {
-            return err!(CustomError::InvalidAmount);
-        }
-
-        if self.reserve_token < token_amount {
-            return err!(CustomError::TokenAmountToSellTooBig);
-        }
-
-        let bought_amount =
-            (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
-
-        let result_amount =
-            (self.total_supply as f64 - self.reserve_token as f64 - token_amount as f64)
-                / 1_000_000.0
-                / 1_000_000_000.0;
-
-        let amount_out = ((bought_amount * bought_amount - result_amount * result_amount)
-            / PROPORTION as f64
-            * 1_000_000_000.0)
-            .round() as u64;
-
-        if self.reserve_sol < amount_out {
-            return err!(CustomError::NotEnoughSolInVault);
-        }
-
-        Ok(amount_out)
-    }
-
-    fn calculate_market_cap(&self) -> Result<u64> {
-        // Tính số token đã bán
-        let sold_amount = (self.total_supply - self.reserve_token) as f64 / 1_000_000_000.0;
-
-        // Tính giá hiện tại theo công thức tương tự sell
-        let current_price = sold_amount / PROPORTION as f64;
-
-        // Market cap = current_price * circulating supply * 10^9 (chuyển về lamports)
-        let market_cap = (current_price * sold_amount * 1_000_000_000.0).round() as u64;
-
-        Ok(market_cap)
     }
 }
