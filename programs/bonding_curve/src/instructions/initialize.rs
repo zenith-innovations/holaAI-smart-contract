@@ -8,10 +8,7 @@ pub fn initialize(
     proportion: f64,
     fee_collector: Pubkey,
     fee_sol_collector: Pubkey,
-    exchange_token_mint: Pubkey,
     initial_token_for_pool: u64,
-    is_sol_fee: bool,
-    is_lockdown: bool,
 ) -> Result<()> {
     let dex_config = &mut ctx.accounts.dex_configuration_account;
 
@@ -25,11 +22,8 @@ pub fn initialize(
         proportion,
         fee_collector,
         fee_sol_collector,
-        exchange_token_mint,
         ctx.accounts.admin.key(),
         initial_token_for_pool,
-        is_sol_fee,
-        is_lockdown,
     ));
 
     emit!(CreateConfigurationEvent {
@@ -39,9 +33,6 @@ pub fn initialize(
         initial_token_for_pool,
         fee_collector,
         fee_sol_collector,
-        exchange_token_mint,
-        is_sol_fee,
-        is_lockdown,
     });
 
     Ok(())
@@ -54,10 +45,7 @@ pub fn update_configuration(
     proportion: f64,
     fee_collector: Pubkey,
     fee_sol_collector: Pubkey,
-    exchange_token_mint: Pubkey,
     initial_token_for_pool: u64,
-    is_sol_fee: bool,
-    is_lockdown: bool,
 ) -> Result<()> {
     let dex_config = &mut ctx.accounts.dex_configuration_account;
 
@@ -67,10 +55,7 @@ pub fn update_configuration(
         proportion,
         fee_collector,
         fee_sol_collector,
-        exchange_token_mint,
         initial_token_for_pool,
-        is_sol_fee,
-        is_lockdown,
     )?;
 
     emit!(UpdateConfigurationEvent {
@@ -80,9 +65,6 @@ pub fn update_configuration(
         initial_token_for_pool,
         fee_collector,
         fee_sol_collector,
-        exchange_token_mint,
-        is_sol_fee,
-        is_lockdown,
     });
 
     Ok(())
@@ -96,9 +78,6 @@ pub struct UpdateConfigurationEvent {
     pub initial_token_for_pool: u64,
     pub fee_collector: Pubkey,
     pub fee_sol_collector: Pubkey,
-    pub exchange_token_mint: Pubkey,
-    pub is_sol_fee: bool,
-    pub is_lockdown: bool,
 }
 
 #[event]
@@ -109,9 +88,6 @@ pub struct CreateConfigurationEvent {
     pub initial_token_for_pool: u64,
     pub fee_collector: Pubkey,
     pub fee_sol_collector: Pubkey,
-    pub exchange_token_mint: Pubkey,
-    pub is_sol_fee: bool,
-    pub is_lockdown: bool,
 }
 
 #[derive(Accounts)]

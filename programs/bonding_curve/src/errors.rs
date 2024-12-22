@@ -67,16 +67,4 @@ pub enum CustomError {
 
     #[msg("Invalid owner")]
     InvalidOwner,
-
-    #[msg("Invalid exchange token mint")]
-    InvalidExchangeTokenMint,
-
-    #[msg("Invalid initial token for pool")]
-    InvalidInitialTokenForPool,
-
-    #[msg("Min output amount not met")]
-    MinOutputAmountNotMet,
-
-    #[msg("Lockdown")]
-    Lockdown,
 }

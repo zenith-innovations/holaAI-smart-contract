@@ -21,10 +21,7 @@ pub mod bonding_curve {
         proportion: f64,
         fee_collector: Pubkey,
         fee_sol_collector: Pubkey,
-        exchange_token_mint: Pubkey,
         initial_token_for_pool: u64,
-        is_sol_fee: bool,
-        is_lockdown: bool,
     ) -> Result<()> {
         instructions::initialize(
             ctx,
@@ -33,10 +30,7 @@ pub mod bonding_curve {
             proportion,
             fee_collector,
             fee_sol_collector,
-            exchange_token_mint,
             initial_token_for_pool,
-            is_sol_fee,
-            is_lockdown,
         )
     }
 
@@ -47,10 +41,7 @@ pub mod bonding_curve {
         proportion: f64,
         fee_collector: Pubkey,
         fee_sol_collector: Pubkey,
-        exchange_token_mint: Pubkey,
-        initial_token_for_pool: u64,
-        is_sol_fee: bool,
-        is_lockdown: bool,
+        initial_token_for_pool: u64
     ) -> Result<()> {
         instructions::update_configuration(
             ctx,
@@ -59,10 +50,7 @@ pub mod bonding_curve {
             proportion,
             fee_collector,
             fee_sol_collector,
-            exchange_token_mint,
             initial_token_for_pool,
-            is_sol_fee,
-            is_lockdown,
         )
     }
 
@@ -78,12 +66,12 @@ pub mod bonding_curve {
         instructions::remove_liquidity(ctx)
     }
 
-    pub fn buy(ctx: Context<Buy>, amount: u64, min_output_amount: u64) -> Result<()> {
-        instructions::buy(ctx, amount, min_output_amount)
+    pub fn buy(ctx: Context<Buy>, amount: u64) -> Result<()> {
+        instructions::buy(ctx, amount)
     }
 
-    pub fn sell(ctx: Context<Sell>, amount: u64, min_output_amount: u64) -> Result<()> {
-        instructions::sell(ctx, amount, min_output_amount)
+    pub fn sell(ctx: Context<Sell>, amount: u64) -> Result<()> {
+        instructions::sell(ctx, amount)
     }
 
     pub fn create_token(

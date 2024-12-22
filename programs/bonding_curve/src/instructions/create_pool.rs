@@ -1,4 +1,4 @@
-use crate::{errors::CustomError, state::*};
+use crate::state::*;
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
@@ -7,14 +7,6 @@ use anchor_spl::{
 
 pub fn create_pool(ctx: Context<CreateLiquidityPool>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
-    let dex_configuration_account = &mut ctx.accounts.dex_configuration_account;
-
-    if dex_configuration_account.get_exchange_token_mint() != ctx.accounts.exchange_token_mint.key() {
-        return err!(CustomError::InvalidExchangeTokenMint);
-    }
-    if dex_configuration_account.get_is_lockdown() == true {
-        return err!(CustomError::Lockdown);
-    }
 
     pool.set_inner(LiquidityPool::new(
         ctx.accounts.payer.key(),
@@ -45,13 +37,6 @@ pub struct CreateLiquidityPool<'info> {
         bump
     )]
     pub pool: Box<Account<'info, LiquidityPool>>,
-
-    #[account(
-        mut,
-        seeds = [CurveConfiguration::SEED.as_bytes()],
-        bump,
-    )]
-    pub dex_configuration_account: Box<Account<'info, CurveConfiguration>>,
 
     #[account(mut)]
     pub token_mint: Box<Account<'info, Mint>>,
