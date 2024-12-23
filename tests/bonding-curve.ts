@@ -19,7 +19,7 @@ import {
 } from "@solana/spl-token";
 import { expect } from "chai";
 import { BN } from "bn.js";
-import keys from "../keys/users.json";
+import keys from "../keys/owner.json";
 import key2 from "../keys/user2.json";
 import {
   ASSOCIATED_PROGRAM_ID,
@@ -40,17 +40,17 @@ import {
   configAddress,
 } from "./utils/config";
 
-// const connection = new Connection(
-//   "https://maximum-winter-leaf.solana-devnet.quiknode.pro/a73e2050e557e0c57baa747de3cb9ad7057022cb",
-//   "confirmed"
-// );
-const connection = new Connection("http://localhost:8899", "confirmed");
+const connection = new Connection(
+  "https://devnet.helius-rpc.com/?api-key=d5206d28-8772-4058-bca3-b6194c2133f3",
+  "confirmed"
+);
+// const connection = new Connection("http://localhost:8899", "confirmed");
 const curveSeed = "CurveConfiguration";
 const POOL_SEED_PREFIX = "liquidity_pool";
 
 describe("bonding_curve", () => {
   const PROGRAM_ID = new anchor.web3.PublicKey(
-    "DpoVAk5Lyu3MWpFMh2RZBCPETxgghaBxyMQ5LZfe6vUH"
+    "7NgLyB7iY8cXtfUjUH6VkdDuxHZzMh6QMD8AtmdiEoVC"
   );
   const transactions = [];
   const program = new Program<BondingCurve>(
@@ -71,64 +71,30 @@ describe("bonding_curve", () => {
   let tokenAta1: PublicKey;
 
   let mint2: PublicKey = new PublicKey(
-    "AVkDULEZFBHaJoFoimy7esEkLdj6b4XqhkZb913cLSed"
+    "HZsBgcpDRA6G2X7suKVhmddZMfmrS3ZscXjJNhEoC9qy"
   );
 
   console.log("Admin's wallet address is : ", user.publicKey.toBase58());
 
-  it("Airdrop to admin wallet", async () => {
-    console.log(
-      `Requesting airdrop to admin for 1SOL : ${user.publicKey.toBase58()}`
-    );
-    // 1 - Request Airdrop
-    await connection.requestAirdrop(user.publicKey, 10 ** 9);
-  });
-
-  it("Airdrop to user wallet", async () => {
-    // transfer token 2 to user2
-    // Tạo token account cho user2 nếu chưa có
-    const user2TokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      user2, // Payer for creating account
-      mint2, // Token mint
-      user2.publicKey // Owner of token account
-    );
-
-    // Transfer 1000 token mint2 cho user2
-    await mintTo(
-      connection,
-      user2, // Payer
-      mint2, // Token mint
-      user2TokenAccount.address, // Destination
-      user2.publicKey, // Mint authority
-      1000 * 10 ** 9 // Amount (với 9 decimals)
-    );
-    // 1 - Request Airdrop
-    await connection.requestAirdrop(user2.publicKey, 10 ** 9);
-  });
-
-  it("Airdrop to user3 wallet", async () => {
-    // transfer token 2 to user2
-    // Tạo token account cho user2 nếu chưa có
-    const user3TokenAccount = await getOrCreateAssociatedTokenAccount(
-      connection,
-      user2, // Payer for creating account
-      mint2, // Token mint
-      user3.publicKey // Owner of token account
-    );
-
-    // Transfer 1000 token mint2 cho user2
-    await mintTo(
-      connection,
-      user2, // Payer
-      mint2, // Token mint
-      user3TokenAccount.address, // Destination
-      user2.publicKey, // Mint authority
-      1000 * 10 ** 9 // Amount (với 9 decimals)
-    );
-    // 1 - Request Airdrop
-    await connection.requestAirdrop(user3.publicKey, 10 ** 9);
-  });
+  // it("Airdrop to admin wallet", async () => {
+  //   try {
+  //     console.log(
+  //       `Requesting airdrop to admin for 1SOL : ${user.publicKey.toBase58()}`
+  //     );
+  //     // 1 - Request Airdrop
+  //     const sig1 = await connection.requestAirdrop(user.publicKey, 1 ** 9);
+  //     await connection.confirmTransaction(sig1);
+  //     console.log("Airdrop request sent successfully");
+  //     const sig2 = await connection.requestAirdrop(user3.publicKey, 1 ** 9);
+  //     await connection.confirmTransaction(sig2);
+  //     console.log("Airdrop request sent successfully");
+  //     const sig3 = await connection.requestAirdrop(user2.publicKey, 1 ** 9);
+  //     await connection.confirmTransaction(sig3);
+  //     console.log("Airdrop request sent successfully");
+  //   } catch (error) {
+  //     console.log("Error in airdrop:", error);
+  //   }
+  // });
 
   it("Initialize the contract", async () => {
     try {
@@ -149,7 +115,7 @@ describe("bonding_curve", () => {
           .initialize(
             new BN(100), // fee percentage
             new BN(0.1 * 10 ** 9), // creation fees
-            1280, // proportion
+            9.14, // proportion
             feeTokenCollector.address, // fee collector
             user.publicKey, // fee sol collector
             mint2,
@@ -183,565 +149,570 @@ describe("bonding_curve", () => {
     }
   });
 
-  it("Update configuration", async () => {
-    try {
-      const [curveConfig] = PublicKey.findProgramAddressSync(
-        [Buffer.from(curveSeed)],
-        program.programId
-      );
-      const feeTokenCollector = await getOrCreateAssociatedTokenAccount(
-        connection,
-        user,
-        mint2,
-        user.publicKey
-      );
-      const tx = new Transaction().add(
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1200_000 }),
-        await program.methods
-          .updateConfiguration(
-            new BN(0), // fee percentage
-            new BN(0.02 * 10 ** 9), // creation fees
-            1280, // proportion
-            feeTokenCollector.address, // fee collector
-            user.publicKey, // fee sol collector
-            mint2,
-            new BN(1_000_000_100), // initial token for pool
-            false, // is_sol_fee
-            false // is_lockdown
-          )
-          .accounts({
-            dexConfigurationAccount: curveConfig,
-            admin: user.publicKey,
-          })
-          .instruction()
-      );
-      tx.feePayer = user.publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      console.log(await connection.simulateTransaction(tx));
-      const sig = await sendAndConfirmTransaction(connection, tx, [user], {
-        skipPreflight: true,
-      });
-      console.log(
-        "Successfully updated initialized : ",
-        `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
-      );
-      transactions.push(`https://explorer.solana.com/tx/${sig}?cluster=devnet`);
-      let pool = await program.account.curveConfiguration.fetch(curveConfig);
-      console.log("Pool State : ", pool);
-    } catch (error) {
-      console.log("Error in initialization :", error);
-    }
-  });
-
-  it("Should create a new token", async () => {
-    try {
-      // Create Token With API
-      const data = {
-        creator: user2.publicKey.toBase58(),
-        name: "Test Token 121324234234234322",
-        description: "Test Token 121324234234234322",
-        ticker: "TEST",
-        image: "https://via.placeholder.com/150",
-        website: "https://www.google.com",
-      };
-      const bearerToken =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3NjJlZmJmNGE1YWJiNWNhZjAxYjFiNCIsIndhbGxldCI6IjJEYW9wUzNCb3dNN2tqbmVVR0hrTlVua3A5NmE3WnoxU0F1NlVXaUp3WlhuIiwibm9uY2UiOiI4ODI1OTQyNDczNDI2NDUiLCJpYXQiOjE3MzQ1MzcxNTEsImV4cCI6MTczNDYyMzU1MX0.uqaW4Y1nCyzldhDz8PDL9AYisqHrWZpkL8VnAhC7Av8";
-      const response = await fetch("http://192.168.0.4:3000/api/agent", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${bearerToken}`,
-        },
-        body: JSON.stringify(data),
-      });
-      const responseData: any = await response.json();
-      console.log("Response from API:", responseData);
-      // Find PDA for mint
-      // 1. Tìm PDA cho mint
-      const [mintPda, mintBump] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("mint"),
-          user2.publicKey.toBuffer(),
-          Buffer.from(responseData.data._id),
-        ],
-        program.programId
-      );
-
-      // 2. Get user token account
-      const userTokenPda = await getAssociatedTokenAddress(
-        mintPda,
-        user2.publicKey
-      );
-
-      // 3. Get user fee token account
-      const userFeeTokenAccount = await getAssociatedTokenAddress(
-        mint2, // token dùng để trả fee
-        user2.publicKey
-      );
-
-      // 4. Get metadata account
-      const [metadataAccount] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("metadata"),
-          TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-          mintPda.toBuffer(),
-        ],
-        TOKEN_METADATA_PROGRAM_ID
-      );
-
-      // 5. Get mint authority
-      const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from("mint_authority"), mintPda.toBuffer()],
-        program.programId
-      );
-
-      // 6. Get curve config
-      const [curveConfig] = PublicKey.findProgramAddressSync(
-        [Buffer.from(curveSeed)],
-        program.programId
-      );
-
-      // 7. Get fee collector account
-      const feeTokenCollector = await getOrCreateAssociatedTokenAccount(
-        connection,
-        user,
-        mint2,
-        user.publicKey
-      );
-
-      // Create token with instruction
-      const tx = await program.methods
-        .createToken(
-          "Test Token 121324234234234322",
-          "TEST",
-          responseData.data._id,
-          "https://www.google.com"
-        )
-        .accounts({
-          mint: mintPda,
-          user: user2.publicKey,
-          userTokenAccount: userTokenPda,
-          mintAuthority: mintAuthorityPda,
-          metadataAccount,
-          dexConfigurationAccount: curveConfig,
-          userFeeTokenAccount: userFeeTokenAccount,
-          feeSolCollector: user.publicKey,
-          feeCollector: feeTokenCollector.address,
-          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          systemProgram: SystemProgram.programId,
-          rent: SYSVAR_RENT_PUBKEY,
-        })
-        .signers([user2])
-        .rpc();
-
-      // Wait for confirmation
-      await connection.confirmTransaction(tx);
-      console.log("Transaction signature:", tx);
-
-      // Store addresses for later use
-      mint1 = mintPda;
-      tokenAta1 = userTokenPda;
-
-      // Log addresses
-      console.log("Mint address:", mint1.toBase58());
-      console.log("Token account:", tokenAta1.toBase58());
-
-      // Verify token account exists and has correct balance
-      const tokenBalance = await connection.getTokenAccountBalance(tokenAta1);
-      console.log("Token balance:", tokenBalance.value.uiAmount);
-
-      // Assertions
-      expect(tokenBalance.value.uiAmount).to.equal(1000000000);
-      expect(tokenBalance.value.decimals).to.equal(9); // 9 decimals
-    } catch (error) {
-      console.error("Failed to create token:", error);
-      throw error;
-    }
-  });
-
-  // it("Mint token 2 to user wallet", async () => {
-  //   console.log("Trying to create and mint token 2 to user's wallet");
+  // it("Update configuration", async () => {
   //   try {
-  //     mint2 = await createMint(
-  //       connection,
-  //       user,
-  //       user.publicKey,
-  //       user.publicKey,
-  //       tokenDecimal
+  //     const [curveConfig] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(curveSeed)],
+  //       program.programId
   //     );
-  //     console.log("mint 2 address: ", mint2.toBase58());
-
-  //     tokenAta2 = (
-  //       await getOrCreateAssociatedTokenAccount(
-  //         connection,
-  //         user,
-  //         mint2,
-  //         user.publicKey
-  //       )
-  //     ).address;
-  //     console.log("token 2 account address: ", tokenAta2.toBase58());
-
-  //     await mintTo(
+  //     const feeTokenCollector = await getOrCreateAssociatedTokenAccount(
   //       connection,
   //       user,
   //       mint2,
-  //       tokenAta2,
-  //       user.publicKey,
-  //       BigInt(amount.toString())
+  //       user.publicKey
   //     );
-  //     const tokenBalance = await connection.getTokenAccountBalance(tokenAta2);
-  //     console.log("token 2 Balance in user:", tokenBalance.value.uiAmount);
-  //     console.log("token 2 successfully minted");
+  //     const tx = new Transaction().add(
+  //       ComputeBudgetProgram.setComputeUnitLimit({ units: 20_000 }),
+  //       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1200_000 }),
+  //       await program.methods
+  //         .updateConfiguration(
+  //           new BN(100), // fee percentage
+  //           new BN(0.1 * 10 ** 9), // creation fees
+  //           9.14, // proportion
+  //           feeTokenCollector.address, // fee collector
+  //           user.publicKey, // fee sol collector
+  //           mint2,
+  //           new BN(1_000_000_100), // initial token for pool
+  //           false, // is_sol_fee
+  //           false // is_lockdown
+  //         )
+  //         .accounts({
+  //           dexConfigurationAccount: curveConfig,
+  //           admin: user.publicKey,
+  //         })
+  //         .instruction()
+  //     );
+  //     tx.feePayer = user.publicKey;
+  //     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  //     console.log(await connection.simulateTransaction(tx));
+  //     const sig = await sendAndConfirmTransaction(connection, tx, [user], {
+  //       skipPreflight: true,
+  //     });
+  //     console.log(
+  //       "Successfully updated initialized : ",
+  //       `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
+  //     );
+  //     transactions.push(`https://explorer.solana.com/tx/${sig}?cluster=devnet`);
+  //     let pool = await program.account.curveConfiguration.fetch(curveConfig);
+  //     console.log("Pool State : ", pool);
   //   } catch (error) {
-  //     console.log("Token 2 creation error \n", error);
+  //     console.log("Error in initialization :", error);
   //   }
   // });
 
-  it("create pool", async () => {
-    try {
-      // Find pool PDA with both token mints
-      const [poolPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from(POOL_SEED_PREFIX), mint1.toBuffer(), mint2.toBuffer()],
-        program.programId
-      );
+  // it("Should create a new token", async () => {
+  //   try {
+  //     // Create Token With API
+  //     const data = {
+  //       creator: user2.publicKey.toBase58(),
+  //       name: "Test Token 121324234234234322",
+  //       description: "Test Token 121324234234234322",
+  //       ticker: "TEST",
+  //       image: "https://via.placeholder.com/150",
+  //       website: "https://www.google.com",
+  //     };
+  //     const responseData = {
+  //       data: {
+  //         _id: Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15),
+  //       },
+  //     };
+  //     // const bearerToken =
+  //     //   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3NjJlZmJmNGE1YWJiNWNhZjAxYjFiNCIsIndhbGxldCI6IjJEYW9wUzNCb3dNN2tqbmVVR0hrTlVua3A5NmE3WnoxU0F1NlVXaUp3WlhuIiwibm9uY2UiOiI4ODI1OTQyNDczNDI2NDUiLCJpYXQiOjE3MzQ1MzcxNTEsImV4cCI6MTczNDYyMzU1MX0.uqaW4Y1nCyzldhDz8PDL9AYisqHrWZpkL8VnAhC7Av8";
+  //     // const response = await fetch("http://192.168.0.10:3000/api/agent", {
+  //     //   method: "POST",
+  //     //   headers: {
+  //     //     "Content-Type": "application/json",
+  //     //     Authorization: `Bearer ${bearerToken}`,
+  //     //   },
+  //     //   body: JSON.stringify(data),
+  //     // });
+  //     // const responseData: any = await response.json();
+  //     // console.log("Response from API:", responseData);
+  //     // Find PDA for mint
+  //     // 1. Tìm PDA cho mint
+  //     const [mintPda, mintBump] = PublicKey.findProgramAddressSync(
+  //       [
+  //         Buffer.from("mint"),
+  //         user2.publicKey.toBuffer(),
+  //         Buffer.from(responseData.data._id),
+  //       ],
+  //       program.programId
+  //     );
 
-      // Get associated token accounts for pool
-      const poolTokenAccount = await getAssociatedTokenAddress(
-        mint1,
-        poolPda,
-        true
-      );
+  //     // 2. Get user token account
+  //     const userTokenPda = await getAssociatedTokenAddress(
+  //       mintPda,
+  //       user2.publicKey
+  //     );
 
-      const poolExchangeTokenAccount = await getAssociatedTokenAddress(
-        mint2,
-        poolPda,
-        true
-      );
+  //     // 3. Get user fee token account
+  //     const userFeeTokenAccount = await getAssociatedTokenAddress(
+  //       mint2, // token dùng để trả fee
+  //       user2.publicKey
+  //     );
 
-      // Create transaction
-      const tx = await program.methods
-        .createPool()
-        .accounts({
-          pool: poolPda,
-          tokenMint: mint1,
-          exchangeTokenMint: mint2,
-          poolTokenAccount: poolTokenAccount,
-          poolExchangeTokenAccount: poolExchangeTokenAccount,
-          payer: user2.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          rent: SYSVAR_RENT_PUBKEY,
-          systemProgram: SystemProgram.programId,
-        })
-        .transaction();
+  //     // 4. Get metadata account
+  //     const [metadataAccount] = PublicKey.findProgramAddressSync(
+  //       [
+  //         Buffer.from("metadata"),
+  //         TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+  //         mintPda.toBuffer(),
+  //       ],
+  //       TOKEN_METADATA_PROGRAM_ID
+  //     );
 
-      // Add compute budget instructions
-      const finalTx = new Transaction().add(
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
-        tx
-      );
+  //     // 5. Get mint authority
+  //     const [mintAuthorityPda] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from("mint_authority"), mintPda.toBuffer()],
+  //       program.programId
+  //     );
 
-      finalTx.feePayer = user2.publicKey;
-      finalTx.recentBlockhash = (
-        await connection.getLatestBlockhash()
-      ).blockhash;
+  //     // 6. Get curve config
+  //     const [curveConfig] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(curveSeed)],
+  //       program.programId
+  //     );
 
-      // Send and confirm transaction
-      const sig = await sendAndConfirmTransaction(
-        connection,
-        finalTx,
-        [user2],
-        {
-          skipPreflight: true,
-        }
-      );
-      //log balance token 1 và 2  của user và pool
-      const balance1 = await connection.getTokenAccountBalance(
-        poolTokenAccount
-      );
-      const balance2 = await connection.getTokenAccountBalance(
-        poolExchangeTokenAccount
-      );
-      console.log("Balance token 1 : ", balance1.value.uiAmount);
-      console.log("Balance token 2 : ", balance2.value.uiAmount);
+  //     // 7. Get fee collector account
+  //     const feeTokenCollector = await getOrCreateAssociatedTokenAccount(
+  //       connection,
+  //       user,
+  //       mint2,
+  //       user.publicKey
+  //     );
 
-      console.log(
-        "Successfully created pool:",
-        `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
-      );
-    } catch (error) {
-      console.log("Error in creating pool:", error);
-    }
-  });
+  //     // Create token with instruction
+  //     const tx = await program.methods
+  //       .createToken(
+  //         "Test Token 121324234234234322",
+  //         "TEST",
+  //         responseData.data._id,
+  //         "https://www.google.com"
+  //       )
+  //       .accounts({
+  //         mint: mintPda,
+  //         user: user2.publicKey,
+  //         userTokenAccount: userTokenPda,
+  //         mintAuthority: mintAuthorityPda,
+  //         metadataAccount,
+  //         dexConfigurationAccount: curveConfig,
+  //         userFeeTokenAccount: userFeeTokenAccount,
+  //         feeSolCollector: user.publicKey,
+  //         feeCollector: feeTokenCollector.address,
+  //         tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+  //         tokenProgram: TOKEN_PROGRAM_ID,
+  //         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //         systemProgram: SystemProgram.programId,
+  //         rent: SYSVAR_RENT_PUBKEY,
+  //       })
+  //       .signers([user2])
+  //       .rpc();
 
-  it("Add liquidity", async () => {
-    try {
-      // Find pool PDA with both token mints
-      const [poolPda] = PublicKey.findProgramAddressSync(
-        [Buffer.from(POOL_SEED_PREFIX), mint1.toBuffer(), mint2.toBuffer()],
-        program.programId
-      );
+  //     // Wait for confirmation
+  //     await connection.confirmTransaction(tx);
+  //     console.log("Transaction signature:", tx);
 
-      const [curveConfig] = PublicKey.findProgramAddressSync(
-        [Buffer.from(curveSeed)],
-        program.programId
-      );
+  //     // Store addresses for later use
+  //     mint1 = mintPda;
+  //     tokenAta1 = userTokenPda;
 
-      // Get pool token accounts
-      const poolTokenAccount = await getAssociatedTokenAddress(
-        mint1,
-        poolPda,
-        true
-      );
+  //     // Log addresses
+  //     console.log("Mint address:", mint1.toBase58());
+  //     console.log("Token account:", tokenAta1.toBase58());
 
-      const poolExchangeTokenAccount = await getAssociatedTokenAddress(
-        mint2,
-        poolPda,
-        true
-      );
+  //     // Verify token account exists and has correct balance
+  //     const tokenBalance = await connection.getTokenAccountBalance(tokenAta1);
+  //     console.log("Token balance:", tokenBalance.value.uiAmount);
 
-      // Get user token accounts
-      const userTokenAccount = await getAssociatedTokenAddress(
-        mint1,
-        user2.publicKey
-      );
+  //     // Assertions
+  //     expect(tokenBalance.value.uiAmount).to.equal(1000000000);
+  //     expect(tokenBalance.value.decimals).to.equal(9); // 9 decimals
+  //   } catch (error) {
+  //     console.error("Failed to create token:", error);
+  //     throw error;
+  //   }
+  // });
 
-      const userExchangeTokenAccount = await getAssociatedTokenAddress(
-        mint2,
-        user2.publicKey
-      );
+  // // it("Mint token 2 to user wallet", async () => {
+  // //   console.log("Trying to create and mint token 2 to user's wallet");
+  // //   try {
+  // //     mint2 = await createMint(
+  // //       connection,
+  // //       user,
+  // //       user.publicKey,
+  // //       user.publicKey,
+  // //       tokenDecimal
+  // //     );
+  // //     console.log("mint 2 address: ", mint2.toBase58());
 
-      const tx = new Transaction().add(
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
-        await program.methods
-          .addLiquidity()
-          .accounts({
-            pool: poolPda,
-            tokenMint: mint1,
-            exchangeTokenMint: mint2,
-            poolTokenAccount: poolTokenAccount,
-            poolExchangeTokenAccount: poolExchangeTokenAccount,
-            userTokenAccount: userTokenAccount,
-            dexConfigurationAccount: curveConfig,
-            userExchangeTokenAccount: userExchangeTokenAccount,
-            user: user2.publicKey,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-            systemProgram: SystemProgram.programId,
-          })
-          .instruction()
-      );
+  // //     tokenAta2 = (
+  // //       await getOrCreateAssociatedTokenAccount(
+  // //         connection,
+  // //         user,
+  // //         mint2,
+  // //         user.publicKey
+  // //       )
+  // //     ).address;
+  // //     console.log("token 2 account address: ", tokenAta2.toBase58());
 
-      tx.feePayer = user2.publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  // //     await mintTo(
+  // //       connection,
+  // //       user,
+  // //       mint2,
+  // //       tokenAta2,
+  // //       user.publicKey,
+  // //       BigInt(amount.toString())
+  // //     );
+  // //     const tokenBalance = await connection.getTokenAccountBalance(tokenAta2);
+  // //     console.log("token 2 Balance in user:", tokenBalance.value.uiAmount);
+  // //     console.log("token 2 successfully minted");
+  // //   } catch (error) {
+  // //     console.log("Token 2 creation error \n", error);
+  // //   }
+  // // });
 
-      console.log(await connection.simulateTransaction(tx));
+  // it("create pool", async () => {
+  //   try {
+  //     // Find pool PDA with both token mints
+  //     const [poolPda] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(POOL_SEED_PREFIX), mint1.toBuffer(), mint2.toBuffer()],
+  //       program.programId
+  //     );
 
-      const sig = await sendAndConfirmTransaction(connection, tx, [user2], {
-        skipPreflight: true,
-      });
+  //     // Get associated token accounts for pool
+  //     const poolTokenAccount = await getAssociatedTokenAddress(
+  //       mint1,
+  //       poolPda,
+  //       true
+  //     );
 
-      console.log(
-        "Successfully added liquidity:",
-        `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
-      );
+  //     const poolExchangeTokenAccount = await getAssociatedTokenAddress(
+  //       mint2,
+  //       poolPda,
+  //       true
+  //     );
 
-      //log balance token mint1 và mint2  của user và pool
-      const balance1 = await connection.getTokenAccountBalance(
-        poolTokenAccount
-      );
-      const balance2 = await connection.getTokenAccountBalance(
-        poolExchangeTokenAccount
-      );
-      console.log("Balance token mint1 : ", balance1.value.uiAmount);
-      console.log("Balance token mint2 : ", balance2.value.uiAmount);
-    } catch (error) {
-      console.log("Error in adding liquidity:", error);
-    }
-  });
+  //     // Create transaction
+  //     const tx = await program.methods
+  //       .createPool()
+  //       .accounts({
+  //         pool: poolPda,
+  //         tokenMint: mint1,
+  //         exchangeTokenMint: mint2,
+  //         poolTokenAccount: poolTokenAccount,
+  //         poolExchangeTokenAccount: poolExchangeTokenAccount,
+  //         payer: user2.publicKey,
+  //         tokenProgram: TOKEN_PROGRAM_ID,
+  //         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //         rent: SYSVAR_RENT_PUBKEY,
+  //         systemProgram: SystemProgram.programId,
+  //       })
+  //       .transaction();
 
-  it("Buy tokens", async () => {
-    try {
-      await connection.requestAirdrop(user3.publicKey, 10 ** 9);
-      // Find configuration PDA
-      const [curveConfig] = PublicKey.findProgramAddressSync(
-        [Buffer.from(curveSeed)],
-        program.programId
-      );
+  //     // Add compute budget instructions
+  //     const finalTx = new Transaction().add(
+  //       ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+  //       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
+  //       tx
+  //     );
 
-      const curveConfigData = await program.account.curveConfiguration.fetch(
-        curveConfig
-      );
-      const feeCollector = curveConfigData.feeCollector;
+  //     finalTx.feePayer = user2.publicKey;
+  //     finalTx.recentBlockhash = (
+  //       await connection.getLatestBlockhash()
+  //     ).blockhash;
 
-      // Find pool PDA with both token mints
-      const [poolPda] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from(POOL_SEED_PREFIX),
-          mint1.toBuffer(), // output token
-          mint2.toBuffer(), // input token
-        ],
-        program.programId
-      );
+  //     // Send and confirm transaction
+  //     const sig = await sendAndConfirmTransaction(
+  //       connection,
+  //       finalTx,
+  //       [user2],
+  //       {
+  //         skipPreflight: true,
+  //       }
+  //     );
+  //     //log balance token 1 và 2  của user và pool
+  //     const balance1 = await connection.getTokenAccountBalance(
+  //       poolTokenAccount
+  //     );
+  //     const balance2 = await connection.getTokenAccountBalance(
+  //       poolExchangeTokenAccount
+  //     );
+  //     console.log("Balance token 1 : ", balance1.value.uiAmount);
+  //     console.log("Balance token 2 : ", balance2.value.uiAmount);
 
-      // Get pool token accounts
-      const poolOutputTokenAccount = await getAssociatedTokenAddress(
-        mint1,
-        poolPda,
-        true
-      );
+  //     console.log(
+  //       "Successfully created pool:",
+  //       `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
+  //     );
+  //   } catch (error) {
+  //     console.log("Error in creating pool:", error);
+  //   }
+  // });
 
-      const poolInputTokenAccount = await getAssociatedTokenAddress(
-        mint2,
-        poolPda,
-        true
-      );
+  // it("Add liquidity", async () => {
+  //   try {
+  //     // Find pool PDA with both token mints
+  //     const [poolPda] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(POOL_SEED_PREFIX), mint1.toBuffer(), mint2.toBuffer()],
+  //       program.programId
+  //     );
 
-      // Get user token accounts
-      const userOutputTokenAccount = await getAssociatedTokenAddress(
-        mint1,
-        user3.publicKey
-      );
+  //     const [curveConfig] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(curveSeed)],
+  //       program.programId
+  //     );
 
-      const userInputTokenAccount = await getAssociatedTokenAddress(
-        mint2,
-        user3.publicKey
-      );
+  //     // Get pool token accounts
+  //     const poolTokenAccount = await getAssociatedTokenAddress(
+  //       mint1,
+  //       poolPda,
+  //       true
+  //     );
 
-      const amount = new BN(600 * 1_000_000_000); // Amount to buy
+  //     const poolExchangeTokenAccount = await getAssociatedTokenAddress(
+  //       mint2,
+  //       poolPda,
+  //       true
+  //     );
 
-      const tx = new Transaction().add(
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
-        await program.methods
-          .buy(amount, new BN(0))
-          .accounts({
-            dexConfigurationAccount: curveConfig,
-            feeTokenCollector: feeCollector,
-            pool: poolPda,
-            outputTokenMint: mint1,
-            inputTokenMint: mint2,
-            poolOutputTokenAccount: poolOutputTokenAccount,
-            poolInputTokenAccount: poolInputTokenAccount,
-            userOutputTokenAccount: userOutputTokenAccount,
-            userInputTokenAccount: userInputTokenAccount,
-            user: user3.publicKey,
-            rent: SYSVAR_RENT_PUBKEY,
-            systemProgram: SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          })
-          .instruction()
-      );
+  //     // Get user token accounts
+  //     const userTokenAccount = await getAssociatedTokenAddress(
+  //       mint1,
+  //       user2.publicKey
+  //     );
 
-      tx.feePayer = user3.publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  //     const userExchangeTokenAccount = await getAssociatedTokenAddress(
+  //       mint2,
+  //       user2.publicKey
+  //     );
 
-      const sig = await sendAndConfirmTransaction(connection, tx, [user3], {
-        skipPreflight: true,
-      });
+  //     const tx = new Transaction().add(
+  //       ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+  //       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
+  //       await program.methods
+  //         .addLiquidity()
+  //         .accounts({
+  //           pool: poolPda,
+  //           tokenMint: mint1,
+  //           exchangeTokenMint: mint2,
+  //           poolTokenAccount: poolTokenAccount,
+  //           poolExchangeTokenAccount: poolExchangeTokenAccount,
+  //           userTokenAccount: userTokenAccount,
+  //           dexConfigurationAccount: curveConfig,
+  //           userExchangeTokenAccount: userExchangeTokenAccount,
+  //           user: user2.publicKey,
+  //           tokenProgram: TOKEN_PROGRAM_ID,
+  //           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //           systemProgram: SystemProgram.programId,
+  //         })
+  //         .instruction()
+  //     );
 
-      console.log(
-        "Successfully bought tokens:",
-        `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
-      );
-    } catch (error) {
-      console.log("Error buying tokens:", error);
-    }
-  });
+  //     tx.feePayer = user2.publicKey;
+  //     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
 
-  it("Sell tokens", async () => {
-    try {
-      // Find configuration PDA
-      const [curveConfig] = PublicKey.findProgramAddressSync(
-        [Buffer.from(curveSeed)],
-        program.programId
-      );
-      const curveConfigData = await program.account.curveConfiguration.fetch(
-        curveConfig
-      );
-      const feeCollector = curveConfigData.feeCollector;
+  //     console.log(await connection.simulateTransaction(tx));
 
-      // Find pool PDA
-      const [poolPda, bump] = PublicKey.findProgramAddressSync(
-        [Buffer.from(POOL_SEED_PREFIX), mint1.toBuffer(), mint2.toBuffer()],
-        program.programId
-      );
+  //     const sig = await sendAndConfirmTransaction(connection, tx, [user2], {
+  //       skipPreflight: true,
+  //     });
 
-      // Get pool token accounts
-      const poolTokenAccount = await getAssociatedTokenAddress(
-        mint1,
-        poolPda,
-        true
-      );
+  //     console.log(
+  //       "Successfully added liquidity:",
+  //       `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
+  //     );
 
-      const poolExchangeTokenAccount = await getAssociatedTokenAddress(
-        mint2,
-        poolPda,
-        true
-      );
+  //     //log balance token mint1 và mint2  của user và pool
+  //     const balance1 = await connection.getTokenAccountBalance(
+  //       poolTokenAccount
+  //     );
+  //     const balance2 = await connection.getTokenAccountBalance(
+  //       poolExchangeTokenAccount
+  //     );
+  //     console.log("Balance token mint1 : ", balance1.value.uiAmount);
+  //     console.log("Balance token mint2 : ", balance2.value.uiAmount);
+  //   } catch (error) {
+  //     console.log("Error in adding liquidity:", error);
+  //   }
+  // });
 
-      // Get user token accounts
-      const userTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        user3,
-        mint1,
-        user3.publicKey
-      );
+  // it("Buy tokens", async () => {
+  //   try {
+  //     // await connection.requestAirdrop(user3.publicKey, 1 ** 9);
+  //     // Find configuration PDA
+  //     const [curveConfig] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(curveSeed)],
+  //       program.programId
+  //     );
 
-      const userExchangeTokenAccount = await getOrCreateAssociatedTokenAccount(
-        connection,
-        user3,
-        mint2,
-        user3.publicKey
-      );
+  //     const curveConfigData = await program.account.curveConfiguration.fetch(
+  //       curveConfig
+  //     );
+  //     const feeCollector = curveConfigData.feeCollector;
 
-      const amount = new BN(10000 * 1_000_000_000); // Amount to sell
+  //     // Find pool PDA with both token mints
+  //     const [poolPda] = PublicKey.findProgramAddressSync(
+  //       [
+  //         Buffer.from(POOL_SEED_PREFIX),
+  //         mint1.toBuffer(), // output token
+  //         mint2.toBuffer(), // input token
+  //       ],
+  //       program.programId
+  //     );
 
-      const tx = new Transaction().add(
-        ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
-        await program.methods
-          .sell(amount, new BN(0))
-          .accounts({
-            dexConfigurationAccount: curveConfig,
-            feeTokenCollector: feeCollector,
-            pool: poolPda,
-            tokenMint: mint1,
-            exchangeTokenMint: mint2,
-            poolTokenAccount: poolTokenAccount,
-            poolExchangeTokenAccount: poolExchangeTokenAccount,
-            userTokenAccount: userTokenAccount.address,
-            userExchangeTokenAccount: userExchangeTokenAccount.address,
-            user: user3.publicKey,
-            rent: SYSVAR_RENT_PUBKEY,
-            systemProgram: SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-            associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
-          })
-          .instruction()
-      );
+  //     // Get pool token accounts
+  //     const poolOutputTokenAccount = await getAssociatedTokenAddress(
+  //       mint1,
+  //       poolPda,
+  //       true
+  //     );
 
-      tx.feePayer = user3.publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  //     const poolInputTokenAccount = await getAssociatedTokenAddress(
+  //       mint2,
+  //       poolPda,
+  //       true
+  //     );
 
-      const sig = await sendAndConfirmTransaction(connection, tx, [user3], {
-        skipPreflight: true,
-      });
+  //     // Get user token accounts
+  //     const userOutputTokenAccount = await getAssociatedTokenAddress(
+  //       mint1,
+  //       user3.publicKey
+  //     );
 
-      console.log(
-        "Successfully sold tokens:",
-        `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
-      );
-    } catch (error) {
-      console.log("Error selling tokens:", error);
-    }
-  });
+  //     const userInputTokenAccount = await getAssociatedTokenAddress(
+  //       mint2,
+  //       user3.publicKey
+  //     );
+
+  //     const amount = new BN(600 * 1_000_000_000); // Amount to buy
+
+  //     const tx = new Transaction().add(
+  //       ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+  //       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
+  //       await program.methods
+  //         .buy(amount, new BN(0))
+  //         .accounts({
+  //           dexConfigurationAccount: curveConfig,
+  //           feeTokenCollector: feeCollector,
+  //           pool: poolPda,
+  //           outputTokenMint: mint1,
+  //           inputTokenMint: mint2,
+  //           poolOutputTokenAccount: poolOutputTokenAccount,
+  //           poolInputTokenAccount: poolInputTokenAccount,
+  //           userOutputTokenAccount: userOutputTokenAccount,
+  //           userInputTokenAccount: userInputTokenAccount,
+  //           user: user3.publicKey,
+  //           rent: SYSVAR_RENT_PUBKEY,
+  //           systemProgram: SystemProgram.programId,
+  //           tokenProgram: TOKEN_PROGRAM_ID,
+  //           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //         })
+  //         .instruction()
+  //     );
+
+  //     tx.feePayer = user3.publicKey;
+  //     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+  //     const sig = await sendAndConfirmTransaction(connection, tx, [user3], {
+  //       skipPreflight: true,
+  //     });
+
+  //     console.log(
+  //       "Successfully bought tokens:",
+  //       `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
+  //     );
+  //   } catch (error) {
+  //     console.log("Error buying tokens:", error);
+  //   }
+  // });
+
+  // it("Sell tokens", async () => {
+  //   try {
+  //     // Find configuration PDA
+  //     const [curveConfig] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(curveSeed)],
+  //       program.programId
+  //     );
+  //     const curveConfigData = await program.account.curveConfiguration.fetch(
+  //       curveConfig
+  //     );
+  //     const feeCollector = curveConfigData.feeCollector;
+
+  //     // Find pool PDA
+  //     const [poolPda, bump] = PublicKey.findProgramAddressSync(
+  //       [Buffer.from(POOL_SEED_PREFIX), mint1.toBuffer(), mint2.toBuffer()],
+  //       program.programId
+  //     );
+
+  //     // Get pool token accounts
+  //     const poolTokenAccount = await getAssociatedTokenAddress(
+  //       mint1,
+  //       poolPda,
+  //       true
+  //     );
+
+  //     const poolExchangeTokenAccount = await getAssociatedTokenAddress(
+  //       mint2,
+  //       poolPda,
+  //       true
+  //     );
+
+  //     // Get user token accounts
+  //     const userTokenAccount = await getOrCreateAssociatedTokenAccount(
+  //       connection,
+  //       user3,
+  //       mint1,
+  //       user3.publicKey
+  //     );
+
+  //     const userExchangeTokenAccount = await getOrCreateAssociatedTokenAccount(
+  //       connection,
+  //       user3,
+  //       mint2,
+  //       user3.publicKey
+  //     );
+
+  //     const amount = new BN(10000 * 1_000_000_000); // Amount to sell
+
+  //     const tx = new Transaction().add(
+  //       ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+  //       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
+  //       await program.methods
+  //         .sell(amount, new BN(0))
+  //         .accounts({
+  //           dexConfigurationAccount: curveConfig,
+  //           feeTokenCollector: feeCollector,
+  //           pool: poolPda,
+  //           tokenMint: mint1,
+  //           exchangeTokenMint: mint2,
+  //           poolTokenAccount: poolTokenAccount,
+  //           poolExchangeTokenAccount: poolExchangeTokenAccount,
+  //           userTokenAccount: userTokenAccount.address,
+  //           userExchangeTokenAccount: userExchangeTokenAccount.address,
+  //           user: user3.publicKey,
+  //           rent: SYSVAR_RENT_PUBKEY,
+  //           systemProgram: SystemProgram.programId,
+  //           tokenProgram: TOKEN_PROGRAM_ID,
+  //           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+  //         })
+  //         .instruction()
+  //     );
+
+  //     tx.feePayer = user3.publicKey;
+  //     tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+
+  //     const sig = await sendAndConfirmTransaction(connection, tx, [user3], {
+  //       skipPreflight: true,
+  //     });
+
+  //     console.log(
+  //       "Successfully sold tokens:",
+  //       `https://solscan.io/tx/${sig}?cluster=custom&customUrl=http%3A%2F%2Flocalhost%3A8899`
+  //     );
+  //   } catch (error) {
+  //     console.log("Error selling tokens:", error);
+  //   }
+  // });
 
   // it("Remove liquidity", async () => {
   //   try {
