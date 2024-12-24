@@ -416,30 +416,20 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         let proportion = curve_config.get_proportion();
         let initial_token_for_pool = curve_config.get_initial_token_for_pool();
         let fee_percentage = curve_config.get_fees();
+        let fee_amount = (amount / 10000) * fee_percentage;
+
         let tokens_sold: f64 =
             self.total_supply as f64 / 1_000_000_000.0 / 1_000_000.0 * 80.0 / 100.0;
+
         let sol_needed: u64 =
             (((tokens_sold * tokens_sold) / (proportion)) * 1_000_000_000.0).round() as u64;
 
-        msg!("reserve_exchange {}", self.reserve_exchange);
-        msg!("total_supply {}", self.total_supply);
-        msg!("tokens_sold {}", tokens_sold);
-        msg!("sol_needed {}", sol_needed);
-        msg!("amount {}", amount);
-
-        if amount > sol_needed - self.reserve_exchange {
-            amount = sol_needed - self.reserve_exchange + initial_token_for_pool;
+        if amount > sol_needed - self.reserve_exchange + fee_amount {
+            amount = sol_needed - self.reserve_exchange + fee_amount + initial_token_for_pool;
         }
-
-        msg!("amount {}", amount);
-
-        msg!("Trying to buy from the pool");
-
-        let fee_amount = amount * fee_percentage / 10000;
 
         let bought_amount =
             (self.total_supply as f64 - self.reserve_token as f64) / 1_000_000.0 / 1_000_000_000.0;
-        msg!("bought_amount {}", bought_amount);
 
         let root_val = (proportion as f64 * (amount - fee_amount) as f64 / 1_000_000_000.0
             + bought_amount * bought_amount)
@@ -468,7 +458,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         self.transfer_token_to_pool(
             token_accounts.5,
             token_accounts.4,
-            amount,
+            amount - fee_amount,
             authority,
             token_program,
         )?;
@@ -481,7 +471,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             token_program,
         )?;
 
-        self.reserve_exchange += amount; // This becomes exchange token reserve
+        self.reserve_exchange += amount - fee_amount; // This becomes exchange token reserve
         self.reserve_token -= amount_out;
 
         msg!("reserve_token {}", self.reserve_token);
@@ -492,9 +482,9 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             token_mint: token_accounts.0.key(),
             amount_in: amount,
             amount_out,
-            reserve_exchange_before: self.reserve_exchange - amount,
+            reserve_exchange_before: self.reserve_exchange,
             reserve_exchange_after: self.reserve_exchange,
-            reserve_token_before: self.reserve_token + amount_out,
+            reserve_token_before: self.reserve_token,
             reserve_token_after: self.reserve_token,
             is_buy: true,
         });
@@ -565,6 +555,7 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
             token_program,
         )?;
 
+        // Transfer exchange tokens from pool to fee token collector
         self.transfer_token_from_pool(
             token_accounts.4,
             token_accounts.6,
@@ -573,18 +564,17 @@ impl<'info> LiquidityPoolAccount<'info> for Account<'info, LiquidityPool> {
         )?;
 
         self.reserve_token += amount;
-        self.reserve_exchange -= amount_out - fee_amount;
-        msg!("reserve_token {}", self.reserve_token);
-        msg!("reserve_exchange {}", self.reserve_exchange);
+        self.reserve_exchange -= amount_out;
+
         emit!(TradeEvent {
             pool: self.key(),
             token_mint: token_accounts.0.key(),
             amount_in: amount,
             amount_out,
             reserve_exchange_before: self.reserve_exchange,
-            reserve_exchange_after: 0,
+            reserve_exchange_after: self.reserve_exchange,
             reserve_token_before: self.reserve_token,
-            reserve_token_after: 0,
+            reserve_token_after: self.reserve_token,
             is_buy: false,
         });
 
